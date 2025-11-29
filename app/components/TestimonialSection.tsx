@@ -1,198 +1,237 @@
 "use client"
 
-import React, { useEffect, useCallback } from "react"
+import { useState } from "react"
 import { motion, AnimatePresence } from "motion/react"
-import { ChevronLeft, ChevronRight, Quote } from "lucide-react"
+import { Quote, GraduationCap, Heart } from "lucide-react"
 import Image from "next/image"
+
+type TestimonialType = "students" | "donors"
 
 interface Testimonial {
   id: number
   name: string
   role: string
+  location: string
   content: string
   image: string
+  highlight?: string
 }
 
-const testimonials: Testimonial[] = [
+const studentTestimonials: Testimonial[] = [
   {
     id: 1,
     name: "Priya Sharma",
-    role: "Computer Science Graduate",
+    role: "B.Tech Computer Science",
+    location: "NIT Warangal",
     content:
-      "Vidyonnati Foundation's support was instrumental in helping me pursue my dream of studying computer science. Their mentorship and financial aid opened doors I never thought possible.",
-    image:
-      "https://images.unsplash.com/photo-1494790108377-be9c29b29330?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80",
+      "Coming from a small village where girls rarely pursued higher education, Vidyonnati gave me wings. Today I'm interning at a top tech company, and my younger sister is inspired to follow the same path.",
+    image: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?ixlib=rb-4.0.3&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80",
+    highlight: "Now at Google",
   },
   {
     id: 2,
     name: "Rahul Patel",
-    role: "Medical Student",
+    role: "MBBS Final Year",
+    location: "Gandhi Medical College",
     content:
-      "Growing up in a small village, becoming a doctor seemed like an impossible dream. Thanks to Vidyonnati Foundation, I'm now on my way to serving my community as a medical professional.",
-    image:
-      "https://images.unsplash.com/photo-1519345182560-3f2917c472ef?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80",
+      "My father is a farmer who couldn't afford my medical education. Vidyonnati not only funded my studies but connected me with doctor mentors who guide me. I'll return to serve my village after graduation.",
+    image: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.0.3&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80",
+    highlight: "First doctor in village",
   },
   {
     id: 3,
-    name: "Ananya Desai",
-    role: "Environmental Science Researcher",
+    name: "Lakshmi Devi",
+    role: "M.Tech Mechanical",
+    location: "IIT Hyderabad",
     content:
-      "The foundation didn't just provide financial support; they believed in my passion for environmental conservation. Their holistic approach to education has shaped my career and life goals.",
-    image:
-      "https://images.unsplash.com/photo-1517841905240-472988babdf9?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80",
+      "Breaking stereotypes in engineering wasn't easy. The foundation believed in me when others doubted. Their support goes beyond money – the mentorship and confidence they gave me changed everything.",
+    image: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?ixlib=rb-4.0.3&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80",
+    highlight: "Research published",
   },
 ]
 
+const donorTestimonials: Testimonial[] = [
+  {
+    id: 1,
+    name: "Rajesh Kumar",
+    role: "IT Professional",
+    location: "Bangalore",
+    content:
+      "I sponsor two students through Vidyonnati. The transparency is remarkable – I receive regular updates, photos, and even handwritten letters from the students. It's not charity; it's building relationships.",
+    image: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-4.0.3&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80",
+    highlight: "2 students sponsored",
+  },
+  {
+    id: 2,
+    name: "Sunita Reddy",
+    role: "Business Owner",
+    location: "Hyderabad",
+    content:
+      "As someone who struggled for education myself, supporting Vidyonnati feels personal. Their 80G certification makes it tax-efficient, but honestly, seeing a student succeed is worth more than any deduction.",
+    image: "https://images.unsplash.com/photo-1580489944761-15a19d654956?ixlib=rb-4.0.3&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80",
+    highlight: "5 years of giving",
+  },
+  {
+    id: 3,
+    name: "Vikram Singh",
+    role: "Corporate CSR Head",
+    location: "TechCorp India",
+    content:
+      "Our company partners with Vidyonnati for CSR. What sets them apart is the measurable impact – we know exactly which students we're supporting and track their progress. It's CSR done right.",
+    image: "https://images.unsplash.com/photo-1519345182560-3f2917c472ef?ixlib=rb-4.0.3&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80",
+    highlight: "₹10L+ contributed",
+  },
+]
+
+function TestimonialCard({ testimonial, index }: { testimonial: Testimonial; index: number }) {
+  return (
+    <motion.div
+      className="group"
+      initial={{ opacity: 0, y: 30 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, delay: index * 0.1 }}
+    >
+      <div className="bg-white rounded-2xl p-6 shadow-lg shadow-gray-100 border border-gray-100 hover:shadow-xl hover:border-primary/20 transition-all duration-300 h-full flex flex-col">
+        {/* Quote icon */}
+        <Quote className="w-10 h-10 text-primary/20 mb-4" />
+
+        {/* Content */}
+        <p className="text-gray-700 leading-relaxed mb-6 flex-grow">
+          "{testimonial.content}"
+        </p>
+
+        {/* Author */}
+        <div className="flex items-center gap-4">
+          <div className="relative">
+            <div className="w-14 h-14 rounded-full overflow-hidden ring-2 ring-primary/20">
+              <Image
+                src={testimonial.image}
+                alt={testimonial.name}
+                width={56}
+                height={56}
+                className="w-full h-full object-cover"
+              />
+            </div>
+            {testimonial.highlight && (
+              <div className="absolute -bottom-1 -right-1 bg-primary text-white text-[10px] font-medium px-1.5 py-0.5 rounded-full whitespace-nowrap">
+                {testimonial.highlight}
+              </div>
+            )}
+          </div>
+          <div>
+            <h4 className="font-bold text-gray-900">{testimonial.name}</h4>
+            <p className="text-sm text-primary">{testimonial.role}</p>
+            <p className="text-xs text-gray-500">{testimonial.location}</p>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  )
+}
+
 export default function TestimonialSection() {
-  const [currentIndex, setCurrentIndex] = React.useState(0)
-  const [direction, setDirection] = React.useState(0)
-  const [isAutoPlaying, setIsAutoPlaying] = React.useState(true)
+  const [activeTab, setActiveTab] = useState<TestimonialType>("students")
 
-  const nextTestimonial = useCallback(() => {
-    setDirection(1)
-    setCurrentIndex((prevIndex) => (prevIndex + 1) % testimonials.length)
-  }, [])
-
-  const prevTestimonial = useCallback(() => {
-    setDirection(-1)
-    setCurrentIndex((prevIndex) => (prevIndex - 1 + testimonials.length) % testimonials.length)
-  }, [])
-
-  useEffect(() => {
-    let intervalId: NodeJS.Timeout
-
-    if (isAutoPlaying) {
-      intervalId = setInterval(() => {
-        nextTestimonial()
-      }, 5000) // Change testimonial every 5 seconds
-    }
-
-    return () => {
-      if (intervalId) {
-        clearInterval(intervalId)
-      }
-    }
-  }, [isAutoPlaying, nextTestimonial])
-
-  const handleManualNavigation = (index: number) => {
-    setIsAutoPlaying(false)
-    setDirection(index > currentIndex ? 1 : -1)
-    setCurrentIndex(index)
-  }
-
-  const variants = {
-    enter: (direction: number) => {
-      return {
-        x: direction > 0 ? 1000 : -1000,
-        opacity: 0,
-      }
-    },
-    center: {
-      zIndex: 1,
-      x: 0,
-      opacity: 1,
-    },
-    exit: (direction: number) => {
-      return {
-        zIndex: 0,
-        x: direction < 0 ? 1000 : -1000,
-        opacity: 0,
-      }
-    },
-  }
+  const testimonials = activeTab === "students" ? studentTestimonials : donorTestimonials
 
   return (
-    <section className="py-20 bg-gradient-to-br from-gray-50 to-white relative overflow-hidden">
-      <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
+    <section className="py-16 md:py-24 bg-gradient-to-b from-white to-orange-50/30 relative overflow-hidden">
+      {/* Background decoration */}
+      <div className="absolute top-0 left-0 w-[400px] h-[400px] bg-primary/5 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2" />
+      <div className="absolute bottom-0 right-0 w-[300px] h-[300px] bg-orange-100/50 rounded-full blur-3xl translate-x-1/2 translate-y-1/2" />
+
       <div className="container mx-auto px-4 relative z-10">
+        {/* Section Header */}
         <motion.div
+          className="text-center mb-12"
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="text-center mb-12"
+          transition={{ duration: 0.6 }}
+          viewport={{ once: true }}
         >
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">Voices of Impact</h2>
-          <div className="w-20 h-1 bg-primary mx-auto mb-4"></div>
-          <p className="text-gray-600 max-w-2xl mx-auto">
-            Hear from the students whose lives have been transformed through education and support.
+          <span className="inline-block bg-primary/10 text-primary text-sm font-semibold px-4 py-1.5 rounded-full mb-4">
+            Testimonials
+          </span>
+          <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-gray-900 mb-4">
+            Voices of <span className="text-primary">Impact</span>
+          </h2>
+          <p className="text-gray-600 max-w-2xl mx-auto text-lg">
+            Real stories from students whose lives were transformed and donors
+            who made it possible.
           </p>
         </motion.div>
 
-        <div className="max-w-6xl mx-auto">
-          <div className="relative h-[400px] md:h-[300px]">
-            <AnimatePresence initial={false} custom={direction}>
-              <motion.div
-                key={currentIndex}
-                custom={direction}
-                variants={variants}
-                initial="enter"
-                animate="center"
-                exit="exit"
-                transition={{
-                  x: { type: "spring", stiffness: 300, damping: 30 },
-                  opacity: { duration: 0.2 },
-                }}
-                className="absolute w-full h-full bg-white bg-opacity-20 backdrop-filter backdrop-blur-lg rounded-3xl shadow-xl p-8 md:p-12"
-              >
-                <Quote className="absolute top-4 left-4 w-12 h-12 text-primary/20" />
-                <div className="flex flex-col md:flex-row items-center gap-8 h-full">
-                  <div className="w-32 h-32 rounded-full overflow-hidden ring-4 ring-primary/20 flex-shrink-0">
-                    <Image
-                      src={testimonials[currentIndex].image || "/placeholder.svg"}
-                      alt={testimonials[currentIndex].name}
-                      width={128}
-                      height={128}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <div className="flex-1 text-center md:text-left">
-                    <p className="text-gray-800 text-lg mb-4 italic">
-                      &ldquo;{testimonials[currentIndex].content}&rdquo;
-                    </p>
-                    <h3 className="text-xl font-semibold text-gray-900">{testimonials[currentIndex].name}</h3>
-                    <p className="text-primary">{testimonials[currentIndex].role}</p>
-                  </div>
-                </div>
-              </motion.div>
-            </AnimatePresence>
-
+        {/* Tabs */}
+        <motion.div
+          className="flex justify-center mb-10"
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.2 }}
+          viewport={{ once: true }}
+        >
+          <div className="inline-flex bg-gray-100 rounded-full p-1.5">
             <button
-              onClick={() => {
-                setIsAutoPlaying(false)
-                prevTestimonial()
-              }}
-              className="absolute top-1/2 left-0 transform -translate-y-1/2 -translate-x-1/2 p-2 rounded-full bg-primary/80 text-white hover:bg-primary transition-colors z-10"
-              aria-label="Previous testimonial"
+              onClick={() => setActiveTab("students")}
+              className={`flex items-center gap-2 px-6 py-3 rounded-full text-sm font-semibold transition-all duration-300 ${
+                activeTab === "students"
+                  ? "bg-primary text-white shadow-lg shadow-primary/25"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
             >
-              <ChevronLeft className="w-6 h-6" />
+              <GraduationCap className="w-4 h-4" />
+              Student Stories
             </button>
             <button
-              onClick={() => {
-                setIsAutoPlaying(false)
-                nextTestimonial()
-              }}
-              className="absolute top-1/2 right-0 transform -translate-y-1/2 translate-x-1/2 p-2 rounded-full bg-primary/80 text-white hover:bg-primary transition-colors z-10"
-              aria-label="Next testimonial"
+              onClick={() => setActiveTab("donors")}
+              className={`flex items-center gap-2 px-6 py-3 rounded-full text-sm font-semibold transition-all duration-300 ${
+                activeTab === "donors"
+                  ? "bg-primary text-white shadow-lg shadow-primary/25"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
             >
-              <ChevronRight className="w-6 h-6" />
+              <Heart className="w-4 h-4" />
+              Donor Experiences
             </button>
           </div>
+        </motion.div>
 
-          <div className="flex justify-center mt-8 gap-2">
-            {testimonials.map((_, index) => (
-              <button
-                key={index}
-                onClick={() => handleManualNavigation(index)}
-                className={`w-3 h-3 rounded-full transition-all ${
-                  index === currentIndex ? "bg-primary scale-125" : "bg-gray-300 hover:bg-primary/50"
-                }`}
-                aria-label={`Go to testimonial ${index + 1}`}
-              />
+        {/* Testimonials Grid */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab}
+            className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 max-w-6xl mx-auto"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3 }}
+          >
+            {testimonials.map((testimonial, index) => (
+              <TestimonialCard key={testimonial.id} testimonial={testimonial} index={index} />
             ))}
-          </div>
-        </div>
+          </motion.div>
+        </AnimatePresence>
+
+        {/* Bottom CTA */}
+        <motion.div
+          className="text-center mt-12"
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.4 }}
+          viewport={{ once: true }}
+        >
+          <p className="text-gray-600 mb-4">
+            {activeTab === "students"
+              ? "Want to create more success stories?"
+              : "Join our community of changemakers"}
+          </p>
+          <a
+            href={activeTab === "students" ? "/donate" : "/donate"}
+            className="inline-flex items-center gap-2 bg-primary hover:bg-primary/90 text-white font-semibold px-8 py-4 rounded-full transition-all duration-300 hover:scale-105 shadow-lg shadow-primary/25"
+          >
+            {activeTab === "students" ? "Support a Student" : "Start Your Journey"}
+          </a>
+        </motion.div>
       </div>
     </section>
   )
 }
-

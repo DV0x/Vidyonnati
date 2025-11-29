@@ -10,9 +10,9 @@ import type React from "react"
 const overpass = Overpass({ subsets: ["latin"] })
 
 export const metadata = {
-  title: "Educational Trust for Underprivileged Children",
-  description: "Helping underprivileged children pursue higher education",
-    generator: 'v0.app'
+  title: "Vidyonnati Foundation | Scholarships for Underprivileged Students",
+  description: "Empowering meritorious students from economically disadvantaged backgrounds to pursue higher education through scholarships and mentorship.",
+  generator: 'v0.app'
 }
 
 export default function RootLayout({
@@ -24,11 +24,11 @@ export default function RootLayout({
     <html lang="en">
       <body className={overpass.className}>
         <DonorProvider>
-          <header>
-            <TopNavigation />
-            <MainNavigation />
-          </header>
-          {children}
+          {/* Top bar - scrolls away */}
+          <TopNavigation />
+          {/* Main nav - sticky */}
+          <MainNavigation />
+          <main>{children}</main>
           <Footer />
         </DonorProvider>
       </body>

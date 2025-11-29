@@ -1,96 +1,259 @@
 "use client"
 
-import { GraduationCap, Star, Rocket, Lightbulb } from "lucide-react"
-import { motion } from "motion/react"
+import { useEffect, useState, useRef } from "react"
+import { motion, useInView } from "motion/react"
+import { GraduationCap, IndianRupee, Building2, Users, Target } from "lucide-react"
 
-export default function GoalsSection() {
-  const goals = [
-    {
-      icon: GraduationCap,
-      title: "Academic Excellence",
-      text: "Supporting meritorious students from government schools",
-    },
-    {
-      icon: Star,
-      title: "Talent Discovery",
-      text: "Identifying and nurturing rural talent through rigorous screening",
-    },
-    {
-      icon: Rocket,
-      title: "Career Development",
-      text: "Providing comprehensive career guidance and mentorship",
-    },
-    {
-      icon: Lightbulb,
-      title: "Leadership Building",
-      text: "Building future entrepreneurs and industry leaders",
-    },
-  ]
+interface Goal {
+  icon: React.ElementType
+  title: string
+  description: string
+  current: number
+  target: number
+  unit: string
+  prefix?: string
+}
+
+const goals: Goal[] = [
+  {
+    icon: GraduationCap,
+    title: "Students Supported",
+    description: "Help deserving students complete their higher education",
+    current: 250,
+    target: 500,
+    unit: "students",
+  },
+  {
+    icon: IndianRupee,
+    title: "Scholarships Disbursed",
+    description: "Total financial aid provided to students",
+    current: 50,
+    target: 100,
+    unit: "lakhs",
+    prefix: "₹",
+  },
+  {
+    icon: Building2,
+    title: "Partner Institutions",
+    description: "Colleges and universities in our network",
+    current: 15,
+    target: 50,
+    unit: "colleges",
+  },
+  {
+    icon: Users,
+    title: "Donor Community",
+    description: "Individual and corporate supporters",
+    current: 500,
+    target: 1000,
+    unit: "donors",
+  },
+]
+
+function CircularProgress({
+  current,
+  target,
+  isInView,
+}: {
+  current: number
+  target: number
+  isInView: boolean
+}) {
+  const percentage = Math.min((current / target) * 100, 100)
+  const radius = 40
+  const circumference = 2 * Math.PI * radius
+  const strokeDashoffset = circumference - (percentage / 100) * circumference
 
   return (
-    <section className="py-20 bg-gradient-to-b from-white to-gray-50">
-      <div className="container mx-auto px-4">
-        <div className="max-w-6xl mx-auto">
-          <motion.div
-            className="text-center mb-16"
-            initial={{ opacity: 0, y: 50 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-            viewport={{ once: true }}
-          >
-            <motion.h2
-              className="text-3xl md:text-4xl font-bold mb-4"
-              initial={{ opacity: 0, y: -20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.2 }}
-              viewport={{ once: true }}
-            >
-              Our Goals
-            </motion.h2>
-            <motion.div
-              className="w-20 h-1 bg-primary mx-auto mb-6"
-              initial={{ width: 0 }}
-              whileInView={{ width: 80 }}
-              transition={{ duration: 0.8, delay: 0.4 }}
-              viewport={{ once: true }}
-            ></motion.div>
-            <motion.p
-              className="text-gray-600 max-w-2xl mx-auto"
-              initial={{ opacity: 0 }}
-              whileInView={{ opacity: 1 }}
-              transition={{ duration: 0.8, delay: 0.6 }}
-              viewport={{ once: true }}
-            >
-              We're committed to creating lasting impact through these key initiatives
-            </motion.p>
-          </motion.div>
+    <div className="relative w-24 h-24">
+      {/* Background circle */}
+      <svg className="w-24 h-24 transform -rotate-90">
+        <circle
+          cx="48"
+          cy="48"
+          r={radius}
+          stroke="currentColor"
+          strokeWidth="8"
+          fill="none"
+          className="text-gray-100"
+        />
+        <motion.circle
+          cx="48"
+          cy="48"
+          r={radius}
+          stroke="currentColor"
+          strokeWidth="8"
+          fill="none"
+          strokeLinecap="round"
+          className="text-primary"
+          initial={{ strokeDashoffset: circumference }}
+          animate={{ strokeDashoffset: isInView ? strokeDashoffset : circumference }}
+          transition={{ duration: 1.5, ease: "easeOut", delay: 0.2 }}
+          style={{
+            strokeDasharray: circumference,
+          }}
+        />
+      </svg>
+      {/* Percentage text */}
+      <div className="absolute inset-0 flex items-center justify-center">
+        <span className="text-lg font-bold text-gray-900">{Math.round(percentage)}%</span>
+      </div>
+    </div>
+  )
+}
 
-          <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-4">
-            {goals.map((goal, index) => (
-              <motion.div
-                key={index}
-                className="group bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 
-                          transform hover:-translate-y-2 border border-gray-100 hover:border-primary"
-                initial={{ opacity: 0, y: 50 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: index * 0.1 }}
-                viewport={{ once: true }}
-              >
-                <div className="flex flex-col items-center text-center space-y-4">
-                  <div className="p-3 bg-primary/10 rounded-full group-hover:bg-primary/20 transition-colors">
-                    <goal.icon className="w-8 h-8 text-primary" />
-                  </div>
-                  <h3 className="text-xl font-semibold text-gray-900 group-hover:text-primary transition-colors">
-                    {goal.title}
-                  </h3>
-                  <p className="text-gray-600 group-hover:text-gray-700 transition-colors">{goal.text}</p>
-                </div>
-              </motion.div>
-            ))}
+function AnimatedNumber({
+  value,
+  prefix = "",
+  isInView,
+}: {
+  value: number
+  prefix?: string
+  isInView: boolean
+}) {
+  const [count, setCount] = useState(0)
+
+  useEffect(() => {
+    if (!isInView) return
+
+    const duration = 1500
+    const steps = 60
+    const stepValue = value / steps
+    const stepDuration = duration / steps
+    let current = 0
+
+    const timer = setInterval(() => {
+      current += stepValue
+      if (current >= value) {
+        setCount(value)
+        clearInterval(timer)
+      } else {
+        setCount(Math.floor(current))
+      }
+    }, stepDuration)
+
+    return () => clearInterval(timer)
+  }, [value, isInView])
+
+  return (
+    <span>
+      {prefix}{count.toLocaleString("en-IN")}
+    </span>
+  )
+}
+
+function GoalCard({ goal, index }: { goal: Goal; index: number }) {
+  const ref = useRef(null)
+  const isInView = useInView(ref, { once: true, margin: "-50px" })
+
+  return (
+    <motion.div
+      ref={ref}
+      className="group"
+      initial={{ opacity: 0, y: 30 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, delay: index * 0.1 }}
+      viewport={{ once: true }}
+    >
+      <div className="bg-white rounded-2xl p-6 shadow-lg shadow-gray-100 border border-gray-100 hover:shadow-xl hover:border-primary/20 transition-all duration-300 hover:-translate-y-1 h-full">
+        <div className="flex flex-col items-center text-center">
+          {/* Circular Progress */}
+          <div className="mb-4">
+            <CircularProgress current={goal.current} target={goal.target} isInView={isInView} />
+          </div>
+
+          {/* Icon */}
+          <div className="w-12 h-12 bg-gradient-to-br from-primary/10 to-orange-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
+            <goal.icon className="w-6 h-6 text-primary" />
+          </div>
+
+          {/* Title */}
+          <h3 className="text-lg font-bold text-gray-900 mb-2">{goal.title}</h3>
+
+          {/* Description */}
+          <p className="text-gray-500 text-sm mb-4">{goal.description}</p>
+
+          {/* Progress stats */}
+          <div className="w-full bg-gray-50 rounded-xl p-3">
+            <div className="flex items-center justify-between text-sm">
+              <div>
+                <p className="text-gray-500">Current</p>
+                <p className="text-xl font-bold text-primary">
+                  <AnimatedNumber value={goal.current} prefix={goal.prefix} isInView={isInView} />
+                </p>
+              </div>
+              <div className="text-gray-300">
+                <Target className="w-5 h-5" />
+              </div>
+              <div className="text-right">
+                <p className="text-gray-500">Target</p>
+                <p className="text-xl font-bold text-gray-900">
+                  {goal.prefix}{goal.target.toLocaleString("en-IN")}
+                </p>
+              </div>
+            </div>
+            <p className="text-xs text-gray-400 mt-2 text-center">{goal.unit}</p>
           </div>
         </div>
+      </div>
+    </motion.div>
+  )
+}
+
+export default function GoalsSection() {
+  return (
+    <section className="py-16 md:py-24 bg-gradient-to-b from-white to-orange-50/30 relative overflow-hidden">
+      {/* Background decoration */}
+      <div className="absolute top-1/2 left-0 w-[300px] h-[300px] bg-primary/5 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2" />
+      <div className="absolute top-1/2 right-0 w-[300px] h-[300px] bg-orange-100/50 rounded-full blur-3xl translate-x-1/2 -translate-y-1/2" />
+
+      <div className="container mx-auto px-4 relative z-10">
+        {/* Section Header */}
+        <motion.div
+          className="text-center mb-12"
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+          viewport={{ once: true }}
+        >
+          <span className="inline-block bg-primary/10 text-primary text-sm font-semibold px-4 py-1.5 rounded-full mb-4">
+            Our Mission
+          </span>
+          <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-gray-900 mb-4">
+            Goals We're <span className="text-primary">Working Towards</span>
+          </h2>
+          <p className="text-gray-600 max-w-2xl mx-auto text-lg">
+            Transparent progress tracking on our journey to transform education
+            access for underprivileged students across India.
+          </p>
+        </motion.div>
+
+        {/* Goals Grid */}
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8">
+          {goals.map((goal, index) => (
+            <GoalCard key={goal.title} goal={goal} index={index} />
+          ))}
+        </div>
+
+        {/* Bottom CTA */}
+        <motion.div
+          className="text-center mt-12"
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.4 }}
+          viewport={{ once: true }}
+        >
+          <p className="text-gray-600 mb-4">
+            Help us reach these milestones faster
+          </p>
+          <a
+            href="/donate"
+            className="inline-flex items-center gap-2 bg-primary hover:bg-primary/90 text-white font-semibold px-8 py-4 rounded-full transition-all duration-300 hover:scale-105 shadow-lg shadow-primary/25"
+          >
+            Contribute to Our Mission
+          </a>
+        </motion.div>
       </div>
     </section>
   )
 }
-
