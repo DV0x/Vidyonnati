@@ -9,12 +9,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { indianStates } from "@/lib/schemas/application"
+import { genderOptions, ApplicationType } from "@/lib/schemas/application"
 
-export function PersonalInfoStep() {
+interface PersonalInfoStepProps {
+  applicationType: ApplicationType
+}
+
+export function PersonalInfoStep({ applicationType }: PersonalInfoStepProps) {
   const { register, setValue, watch, formState: { errors } } = useFormContext()
 
-  const state = watch("state")
+  const gender = watch("gender")
+  const isSecondYear = applicationType === "second-year"
 
   return (
     <div className="space-y-4">
@@ -23,7 +28,7 @@ export function PersonalInfoStep() {
         <AnimatedInput
           label="Full Name (as per official documents)"
           {...register("fullName")}
-          value={watch("fullName")}
+          value={watch("fullName") || ""}
           onChange={(e) => setValue("fullName", e.target.value, { shouldValidate: true })}
         />
         {errors.fullName && (
@@ -38,7 +43,7 @@ export function PersonalInfoStep() {
             type="email"
             label="Email Address"
             {...register("email")}
-            value={watch("email")}
+            value={watch("email") || ""}
             onChange={(e) => setValue("email", e.target.value, { shouldValidate: true })}
           />
           {errors.email && (
@@ -50,7 +55,7 @@ export function PersonalInfoStep() {
             type="tel"
             label="Mobile Number"
             {...register("phone")}
-            value={watch("phone")}
+            value={watch("phone") || ""}
             onChange={(e) => setValue("phone", e.target.value, { shouldValidate: true })}
           />
           {errors.phone && (
@@ -59,7 +64,7 @@ export function PersonalInfoStep() {
         </div>
       </div>
 
-      {/* Date of Birth */}
+      {/* Date of Birth & Gender (gender only for 2nd year) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <div className="relative">
@@ -69,85 +74,112 @@ export function PersonalInfoStep() {
               {...register("dateOfBirth")}
             />
             <label className="absolute left-3 top-2 text-xs text-gray-500 pointer-events-none">
-              Date of Birth
+              Date of Birth (as per SSC)
             </label>
           </div>
           {errors.dateOfBirth && (
             <p className="text-red-500 text-xs mt-1">{errors.dateOfBirth.message as string}</p>
           )}
         </div>
-      </div>
 
-      {/* Address - Full width */}
-      <div>
-        <AnimatedInput
-          label="Full Address"
-          {...register("address")}
-          value={watch("address")}
-          onChange={(e) => setValue("address", e.target.value, { shouldValidate: true })}
-        />
-        {errors.address && (
-          <p className="text-red-500 text-xs mt-1">{errors.address.message as string}</p>
+        {/* Gender - Only for 2nd year */}
+        {isSecondYear && (
+          <div>
+            <div className="relative">
+              <Select
+                value={gender}
+                onValueChange={(value) => setValue("gender", value, { shouldValidate: true })}
+              >
+                <SelectTrigger className="h-[52px] pt-5 pb-2 px-3 text-sm border-gray-300 focus:ring-2 focus:ring-primary/20 focus:border-primary rounded-lg">
+                  <SelectValue placeholder="" />
+                </SelectTrigger>
+                <SelectContent>
+                  {genderOptions.map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {option === "male" ? "Male" : "Female"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <label className={`absolute left-3 pointer-events-none transition-all ${
+                gender ? "top-2 text-xs text-gray-500" : "top-1/2 -translate-y-1/2 text-sm text-gray-400"
+              }`}>
+                Gender
+              </label>
+            </div>
+            {errors.gender && (
+              <p className="text-red-500 text-xs mt-1">{errors.gender.message as string}</p>
+            )}
+          </div>
         )}
       </div>
 
-      {/* City & State - Side by side */}
+      {/* Village/Town & Mandal - Side by side */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <AnimatedInput
-            label="City"
-            {...register("city")}
-            value={watch("city")}
-            onChange={(e) => setValue("city", e.target.value, { shouldValidate: true })}
+            label="Village/Town"
+            {...register("village")}
+            value={watch("village") || ""}
+            onChange={(e) => setValue("village", e.target.value, { shouldValidate: true })}
           />
-          {errors.city && (
-            <p className="text-red-500 text-xs mt-1">{errors.city.message as string}</p>
+          {errors.village && (
+            <p className="text-red-500 text-xs mt-1">{errors.village.message as string}</p>
           )}
         </div>
         <div>
-          <div className="relative">
-            <Select
-              value={state}
-              onValueChange={(value) => setValue("state", value, { shouldValidate: true })}
-            >
-              <SelectTrigger className="h-[52px] pt-5 pb-2 px-3 text-sm border-gray-300 focus:ring-2 focus:ring-primary/20 focus:border-primary rounded-lg">
-                <SelectValue placeholder="" />
-              </SelectTrigger>
-              <SelectContent>
-                {indianStates.map((stateName) => (
-                  <SelectItem key={stateName} value={stateName}>
-                    {stateName}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <label className={`absolute left-3 pointer-events-none transition-all ${
-              state ? "top-2 text-xs text-gray-500" : "top-1/2 -translate-y-1/2 text-sm text-gray-400"
-            }`}>
-              State
-            </label>
-          </div>
-          {errors.state && (
-            <p className="text-red-500 text-xs mt-1">{errors.state.message as string}</p>
+          <AnimatedInput
+            label="Mandal"
+            {...register("mandal")}
+            value={watch("mandal") || ""}
+            onChange={(e) => setValue("mandal", e.target.value, { shouldValidate: true })}
+          />
+          {errors.mandal && (
+            <p className="text-red-500 text-xs mt-1">{errors.mandal.message as string}</p>
           )}
         </div>
       </div>
 
-      {/* PIN Code */}
+      {/* District & PIN Code - Side by side */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <AnimatedInput
+            label="District"
+            {...register("district")}
+            value={watch("district") || ""}
+            onChange={(e) => setValue("district", e.target.value, { shouldValidate: true })}
+          />
+          {errors.district && (
+            <p className="text-red-500 text-xs mt-1">{errors.district.message as string}</p>
+          )}
+        </div>
         <div>
           <AnimatedInput
             type="text"
             label="PIN Code"
             maxLength={6}
             {...register("pincode")}
-            value={watch("pincode")}
+            value={watch("pincode") || ""}
             onChange={(e) => setValue("pincode", e.target.value.replace(/\D/g, ""), { shouldValidate: true })}
           />
           {errors.pincode && (
             <p className="text-red-500 text-xs mt-1">{errors.pincode.message as string}</p>
           )}
         </div>
+      </div>
+
+      {/* Address (Street/Door No) - Full width */}
+      <div>
+        <AnimatedInput
+          label="Residential Address (Door No, Street)"
+          {...register("address")}
+          value={watch("address") || ""}
+          onChange={(e) => setValue("address", e.target.value, { shouldValidate: true })}
+        />
+        {errors.address && (
+          <p className="text-red-500 text-xs mt-1">{errors.address.message as string}</p>
+        )}
+        <p className="text-xs text-gray-400 mt-1">Enter door number, street name, and any landmarks</p>
       </div>
     </div>
   )

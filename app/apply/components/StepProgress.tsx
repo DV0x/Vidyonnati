@@ -1,18 +1,19 @@
 "use client"
 
 import { motion } from "motion/react"
-import { Check, User, GraduationCap, Users, FileText, PenLine, Send } from "lucide-react"
+import { Check, User, Users, GraduationCap, Landmark, FileText, Send } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface StepProgressProps {
   currentStep: number
   totalSteps: number
   steps: { title: string; shortTitle: string }[]
+  onStepClick?: (step: number) => void
 }
 
-const stepIcons = [User, GraduationCap, Users, FileText, PenLine, Send]
+const stepIcons = [User, Users, GraduationCap, Landmark, FileText, Send]
 
-export function StepProgress({ currentStep, totalSteps, steps }: StepProgressProps) {
+export function StepProgress({ currentStep, totalSteps, steps, onStepClick }: StepProgressProps) {
   const progress = (currentStep / (totalSteps - 1)) * 100
 
   return (
@@ -61,16 +62,27 @@ export function StepProgress({ currentStep, totalSteps, steps }: StepProgressPro
               const isCurrent = index === currentStep
               const isPending = index > currentStep
 
+              const canClick = isCompleted && onStepClick
+
               return (
                 <div key={index} className="flex items-start flex-1 last:flex-none">
-                  <div className="flex flex-col items-center">
+                  <button
+                    type="button"
+                    className={cn(
+                      "flex flex-col items-center",
+                      canClick && "cursor-pointer group"
+                    )}
+                    onClick={() => canClick && onStepClick(index)}
+                    disabled={!canClick}
+                  >
                     {/* Step circle */}
                     <motion.div
                       className={cn(
                         "relative w-11 h-11 rounded-xl flex items-center justify-center transition-all duration-300",
                         isCompleted && "bg-gradient-to-br from-primary to-orange-500 shadow-lg shadow-primary/25",
                         isCurrent && "bg-gradient-to-br from-primary to-orange-500 shadow-lg shadow-primary/30",
-                        isPending && "bg-gray-100 border-2 border-gray-200"
+                        isPending && "bg-gray-100 border-2 border-gray-200",
+                        canClick && "group-hover:scale-110 group-hover:shadow-xl group-hover:shadow-primary/30"
                       )}
                       initial={false}
                       animate={{
@@ -109,12 +121,13 @@ export function StepProgress({ currentStep, totalSteps, steps }: StepProgressPro
                         "mt-3 text-xs font-medium text-center max-w-[70px] leading-tight transition-colors",
                         isCompleted && "text-primary",
                         isCurrent && "text-gray-900",
-                        isPending && "text-gray-400"
+                        isPending && "text-gray-400",
+                        canClick && "group-hover:text-primary/80"
                       )}
                     >
                       {step.shortTitle}
                     </span>
-                  </div>
+                  </button>
 
                   {/* Connector line */}
                   {index < steps.length - 1 && (

@@ -1,9 +1,9 @@
 "use client"
 
 import { useFormContext } from "react-hook-form"
-import { ClipboardCheck, Edit2, User, GraduationCap, Users, FileText, PenLine } from "lucide-react"
+import { ClipboardCheck, Edit2, User, GraduationCap, Users, FileText, PenLine, Landmark } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { type ApplicationType, indianStates } from "@/lib/schemas/application"
+import { type ApplicationType, incomeBracketLabels, incomeBrackets } from "@/lib/schemas/application"
 
 interface ReviewStepProps {
   applicationType: ApplicationType
@@ -15,6 +15,7 @@ export function ReviewStep({ applicationType, onEdit }: ReviewStepProps) {
   const data = watch()
 
   const isFirstYear = applicationType === "first-year"
+  const isSecondYear = applicationType === "second-year"
 
   return (
     <div className="space-y-6">
@@ -46,10 +47,43 @@ export function ReviewStep({ applicationType, onEdit }: ReviewStepProps) {
           <ReviewItem label="Email" value={data.email} />
           <ReviewItem label="Phone" value={data.phone} />
           <ReviewItem label="Date of Birth" value={data.dateOfBirth} />
-          <ReviewItem label="Address" value={data.address} fullWidth />
-          <ReviewItem label="City" value={data.city} />
-          <ReviewItem label="State" value={data.state} />
+          {isSecondYear && <ReviewItem label="Gender" value={data.gender} />}
+          <ReviewItem label="Village/Town" value={data.village} />
+          <ReviewItem label="Mandal" value={data.mandal} />
+          <ReviewItem label="District" value={data.district} />
           <ReviewItem label="PIN Code" value={data.pincode} />
+          <ReviewItem label="Address" value={data.address} fullWidth />
+        </ReviewGrid>
+      </ReviewSection>
+
+      {/* Family Details */}
+      <ReviewSection
+        icon={<Users className="w-4 h-4" />}
+        title="Family Details"
+        onEdit={() => onEdit(1)}
+      >
+        <ReviewGrid>
+          {isFirstYear ? (
+            <>
+              <ReviewItem label="Mother's Name" value={data.motherName} />
+              <ReviewItem label="Father's Name" value={data.fatherName} />
+              {data.guardianName && <ReviewItem label="Guardian Name" value={data.guardianName} />}
+              {data.guardianRelationship && <ReviewItem label="Guardian Relationship" value={data.guardianRelationship} />}
+            </>
+          ) : (
+            <>
+              <ReviewItem label="Mother's Name" value={data.motherName} />
+              <ReviewItem label="Mother's Occupation" value={data.motherOccupation} />
+              <ReviewItem label="Mother's Mobile" value={data.motherMobile} />
+              <ReviewItem label="Father's Name" value={data.fatherName} />
+              <ReviewItem label="Father's Occupation" value={data.fatherOccupation} />
+              <ReviewItem label="Father's Mobile" value={data.fatherMobile} />
+              {data.guardianDetails && <ReviewItem label="Guardian Details" value={data.guardianDetails} fullWidth />}
+              <ReviewItem label="Family Adults" value={data.familyAdultsCount?.toString()} />
+              <ReviewItem label="Family Children" value={data.familyChildrenCount?.toString()} />
+              <ReviewItem label="Annual Family Income" value={data.annualFamilyIncome ? incomeBracketLabels[data.annualFamilyIncome as typeof incomeBrackets[number]] : "-"} />
+            </>
+          )}
         </ReviewGrid>
       </ReviewSection>
 
@@ -57,53 +91,44 @@ export function ReviewStep({ applicationType, onEdit }: ReviewStepProps) {
       <ReviewSection
         icon={<GraduationCap className="w-4 h-4" />}
         title="Education Details"
-        onEdit={() => onEdit(1)}
+        onEdit={() => onEdit(2)}
       >
         <ReviewGrid>
-          <ReviewItem label="Institution" value={data.currentInstitution} fullWidth />
-          <ReviewItem label="Institution Type" value={data.institutionType?.replace("-", " ")} />
-          <ReviewItem label="Class/Year" value={data.classOrYear} />
-          <ReviewItem label="Field of Study" value={data.fieldOfStudy} />
-          <ReviewItem label="Board/University" value={data.boardOrUniversity} />
+          <ReviewItem label="High School Studied" value={data.highSchoolStudied} fullWidth />
+          <ReviewItem label="SSC Marks" value={`${data.sscTotalMarks || '-'}/${data.sscMaxMarks || '-'}`} />
+          <ReviewItem label="SSC Percentage" value={data.sscPercentage ? `${data.sscPercentage}%` : '-'} />
+
           {isFirstYear ? (
             <>
-              <ReviewItem label="10th Marks" value={data.previousMarksPercentage} />
-              <ReviewItem label="Marks Type" value={data.previousMarksType} />
+              <ReviewItem label="College Admitted" value={data.collegeAdmitted} fullWidth />
+              <ReviewItem label="College Address" value={data.collegeAddress} fullWidth />
+              <ReviewItem label="Course Joined" value={data.courseJoined} />
+              <ReviewItem label="Group/Subjects" value={data.groupSubjects} />
+              <ReviewItem label="Date of Admission" value={data.dateOfAdmission} />
             </>
           ) : (
             <>
-              <ReviewItem label="Current Year Marks" value={data.currentYearMarks} />
-              <ReviewItem label="Marks Type" value={data.currentMarksType} />
-              {data.previousScholarshipId && (
-                <ReviewItem label="Previous Scholarship ID" value={data.previousScholarshipId} />
-              )}
+              <ReviewItem label="Current College" value={data.currentCollege} fullWidth />
+              <ReviewItem label="College Address" value={data.collegeAddress} fullWidth />
+              <ReviewItem label="Course Studying" value={data.courseStudying} />
+              <ReviewItem label="Group/Subjects" value={data.groupSubjects} />
+              <ReviewItem label="1st Year Marks" value={`${data.firstYearTotalMarks || '-'}/${data.firstYearMaxMarks || '-'}`} />
+              <ReviewItem label="1st Year Percentage" value={data.firstYearPercentage ? `${data.firstYearPercentage}%` : '-'} />
             </>
           )}
         </ReviewGrid>
       </ReviewSection>
 
-      {/* Family Background */}
+      {/* Bank Details */}
       <ReviewSection
-        icon={<Users className="w-4 h-4" />}
-        title="Family Background"
-        onEdit={() => onEdit(2)}
+        icon={<Landmark className="w-4 h-4" />}
+        title="Bank Details"
+        onEdit={() => onEdit(3)}
       >
         <ReviewGrid>
-          {(!isFirstYear && data.familyDetailsUnchanged) ? (
-            <div className="col-span-2 text-sm text-blue-600 bg-blue-50 px-3 py-2 rounded-lg">
-              Family details unchanged from previous year
-            </div>
-          ) : (
-            <>
-              <ReviewItem label="Guardian Name" value={data.guardianName} />
-              <ReviewItem label="Relationship" value={data.guardianRelation} />
-              <ReviewItem label="Guardian Phone" value={data.guardianPhone} />
-              <ReviewItem label="Occupation" value={data.guardianOccupation} />
-              <ReviewItem label="No. of Dependents" value={data.numberOfDependents?.toString()} />
-              <ReviewItem label="Income Source" value={data.incomeSource} />
-            </>
-          )}
-          <ReviewItem label="Annual Family Income" value={formatIncome(data.annualFamilyIncome)} />
+          <ReviewItem label="Account Number" value={data.bankAccountNumber} />
+          <ReviewItem label="Bank & Branch" value={data.bankNameBranch} />
+          <ReviewItem label="IFSC Code" value={data.ifscCode} />
         </ReviewGrid>
       </ReviewSection>
 
@@ -111,68 +136,55 @@ export function ReviewStep({ applicationType, onEdit }: ReviewStepProps) {
       <ReviewSection
         icon={<FileText className="w-4 h-4" />}
         title="Uploaded Documents"
-        onEdit={() => onEdit(3)}
+        onEdit={() => onEdit(4)}
       >
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {isFirstYear ? (
             <>
-              <DocumentBadge label="Photo" uploaded={!!data.photo} />
-              <DocumentBadge label="ID Proof" uploaded={!!data.idProof} />
-              <DocumentBadge label="Income Cert." uploaded={!!data.incomeCertificate} />
-              <DocumentBadge label="10th Marks" uploaded={!!data.tenthMarksheet} />
+              <DocumentBadge label="SSC Marksheet" uploaded={!!data.sscMarksheet} />
+              <DocumentBadge label="Student Aadhar" uploaded={!!data.aadharStudent} />
+              <DocumentBadge label="Parent Aadhar" uploaded={!!data.aadharParent} />
+              <DocumentBadge label="Bonafide" uploaded={!!data.bonafideCertificate} />
+              <DocumentBadge label="Bank Passbook" uploaded={!!data.bankPassbook} />
             </>
           ) : (
             <>
-              <DocumentBadge label="Photo" uploaded={!!data.photo} optional />
-              <DocumentBadge label="Income Cert." uploaded={!!data.incomeCertificate} />
-              <DocumentBadge label="Current Marks" uploaded={!!data.currentYearMarksheet} />
+              <DocumentBadge label="Student Aadhar" uploaded={!!data.aadharStudent} />
+              <DocumentBadge label="Parent Aadhar" uploaded={!!data.aadharParent} />
+              <DocumentBadge label="Bank Passbook" uploaded={!!data.bankPassbook} />
+              <DocumentBadge label="Bonafide" uploaded={!!data.bonafideCertificate} />
+              <DocumentBadge label="1st Year Marks" uploaded={!!data.firstYearMarksheet} />
+              <DocumentBadge label="Mango Plant" uploaded={!!data.mangoPlantPhoto} optional />
             </>
           )}
         </div>
       </ReviewSection>
 
-      {/* Statement */}
-      <ReviewSection
-        icon={<PenLine className="w-4 h-4" />}
-        title={isFirstYear ? "Statement of Purpose" : "Progress Report"}
-        onEdit={() => onEdit(4)}
-      >
-        <div className="space-y-4">
-          {isFirstYear ? (
-            <>
+      {/* Essays (2nd Year Only) */}
+      {isSecondYear && (
+        <ReviewSection
+          icon={<PenLine className="w-4 h-4" />}
+          title="Progress Report & Goals"
+          onEdit={() => onEdit(4)}
+        >
+          <div className="space-y-4">
+            <div>
+              <p className="text-xs font-medium text-gray-500 mb-1">Study & Extra-curricular Activities</p>
+              <p className="text-sm text-gray-700 bg-gray-50 p-3 rounded-lg">{data.studyActivities || "-"}</p>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-gray-500 mb-1">Goals, Dreams & Plan of Action</p>
+              <p className="text-sm text-gray-700 bg-gray-50 p-3 rounded-lg">{data.goalsDreams || "-"}</p>
+            </div>
+            {data.additionalInfo && (
               <div>
-                <p className="text-xs font-medium text-gray-500 mb-1">Why do you need this scholarship?</p>
-                <p className="text-sm text-gray-700 bg-gray-50 p-3 rounded-lg">{data.whyNeedScholarship || "-"}</p>
+                <p className="text-xs font-medium text-gray-500 mb-1">Additional Information</p>
+                <p className="text-sm text-gray-700 bg-gray-50 p-3 rounded-lg">{data.additionalInfo}</p>
               </div>
-              <div>
-                <p className="text-xs font-medium text-gray-500 mb-1">Educational Goals</p>
-                <p className="text-sm text-gray-700 bg-gray-50 p-3 rounded-lg">{data.educationalGoals || "-"}</p>
-              </div>
-              <div>
-                <p className="text-xs font-medium text-gray-500 mb-1">Career Aspirations</p>
-                <p className="text-sm text-gray-700 bg-gray-50 p-3 rounded-lg">{data.careerAspirations || "-"}</p>
-              </div>
-            </>
-          ) : (
-            <>
-              <div>
-                <p className="text-xs font-medium text-gray-500 mb-1">Progress Report</p>
-                <p className="text-sm text-gray-700 bg-gray-50 p-3 rounded-lg">{data.progressReport || "-"}</p>
-              </div>
-              <div>
-                <p className="text-xs font-medium text-gray-500 mb-1">Educational Goals</p>
-                <p className="text-sm text-gray-700 bg-gray-50 p-3 rounded-lg">{data.educationalGoals || "-"}</p>
-              </div>
-              {data.challengesFaced && (
-                <div>
-                  <p className="text-xs font-medium text-gray-500 mb-1">Challenges Faced</p>
-                  <p className="text-sm text-gray-700 bg-gray-50 p-3 rounded-lg">{data.challengesFaced}</p>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      </ReviewSection>
+            )}
+          </div>
+        </ReviewSection>
+      )}
 
       {/* Declaration */}
       <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
@@ -270,15 +282,4 @@ function DocumentBadge({
       {label}
     </div>
   )
-}
-
-function formatIncome(value?: string): string {
-  const labels: Record<string, string> = {
-    "below-1-lakh": "Below ₹1,00,000",
-    "1-2-lakh": "₹1,00,000 - ₹2,00,000",
-    "2-3-lakh": "₹2,00,000 - ₹3,00,000",
-    "3-5-lakh": "₹3,00,000 - ₹5,00,000",
-    "above-5-lakh": "Above ₹5,00,000",
-  }
-  return labels[value || ""] || value || "-"
 }

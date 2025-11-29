@@ -3,8 +3,6 @@
 import { useState, useEffect, useCallback } from "react"
 import { motion, AnimatePresence } from "motion/react"
 import { useForm, FormProvider } from "react-hook-form"
-import { zodResolver } from "@hookform/resolvers/zod"
-import { z } from "zod"
 import { Button } from "@/components/ui/button"
 import {
   ArrowLeft,
@@ -17,56 +15,28 @@ import {
 import { StepProgress } from "./StepProgress"
 import {
   type ApplicationType,
-  personalInfoSchema,
-  firstYearEducationSchema,
-  secondYearEducationSchema,
-  familyBackgroundSchema,
-  secondYearFamilyBackgroundSchema,
-  firstYearDocumentsSchema,
-  secondYearDocumentsSchema,
-  firstYearStatementSchema,
-  secondYearStatementSchema,
+  getStepFields,
 } from "@/lib/schemas/application"
 
 import { PersonalInfoStep } from "./steps/PersonalInfoStep"
-import { EducationStep } from "./steps/EducationStep"
 import { FamilyBackgroundStep } from "./steps/FamilyBackgroundStep"
+import { EducationStep } from "./steps/EducationStep"
+import { BankDetailsStep } from "./steps/BankDetailsStep"
 import { DocumentsStep } from "./steps/DocumentsStep"
-import { StatementStep } from "./steps/StatementStep"
 import { ReviewStep } from "./steps/ReviewStep"
 
+// Step configurations - same for both types, content differs within components
 const STEPS = [
   { title: "Personal Information", shortTitle: "Personal" },
+  { title: "Family Details", shortTitle: "Family" },
   { title: "Education Details", shortTitle: "Education" },
-  { title: "Family Background", shortTitle: "Family" },
-  { title: "Documents", shortTitle: "Documents" },
-  { title: "Statement of Purpose", shortTitle: "Statement" },
+  { title: "Bank Details", shortTitle: "Bank" },
+  { title: "Documents", shortTitle: "Documents" }, // 2nd year: Essays & Documents
   { title: "Review & Submit", shortTitle: "Review" },
 ]
 
 const STORAGE_KEY_PREFIX = "vidyonnati_application_draft_"
 const STORAGE_EXPIRY = 24 * 60 * 60 * 1000
-
-function getStepSchema(step: number, applicationType: ApplicationType) {
-  const isFirstYear = applicationType === "first-year"
-
-  switch (step) {
-    case 0:
-      return personalInfoSchema
-    case 1:
-      return isFirstYear ? firstYearEducationSchema : secondYearEducationSchema
-    case 2:
-      return isFirstYear ? familyBackgroundSchema : secondYearFamilyBackgroundSchema
-    case 3:
-      return isFirstYear ? firstYearDocumentsSchema : secondYearDocumentsSchema
-    case 4:
-      return isFirstYear ? firstYearStatementSchema : secondYearStatementSchema
-    case 5:
-      return z.object({})
-    default:
-      return z.object({})
-  }
-}
 
 export function ApplicationWizard() {
   const [applicationType, setApplicationType] = useState<ApplicationType>("first-year")
@@ -78,47 +48,80 @@ export function ApplicationWizard() {
   const methods = useForm({
     mode: "onChange",
     defaultValues: {
+      // Personal Info (common)
       fullName: "",
       email: "",
       phone: "",
-      address: "",
-      city: "",
-      state: "",
-      pincode: "",
       dateOfBirth: "",
-      currentInstitution: "",
-      institutionType: undefined,
-      classOrYear: "",
-      fieldOfStudy: "",
-      boardOrUniversity: "",
-      previousMarksPercentage: "",
-      previousMarksType: undefined,
-      currentYearMarks: "",
-      currentMarksType: undefined,
-      previousScholarshipId: "",
+      village: "",
+      mandal: "",
+      district: "",
+      pincode: "",
+      address: "",
+      gender: undefined, // 2nd year only
+
+      // Family (1st year: simple)
+      motherName: "",
+      fatherName: "",
       guardianName: "",
-      guardianRelation: undefined,
-      guardianPhone: "",
-      guardianOccupation: "",
+      guardianRelationship: "",
+
+      // Family (2nd year: detailed)
+      motherOccupation: "",
+      motherMobile: "",
+      fatherOccupation: "",
+      fatherMobile: "",
+      guardianDetails: "",
+      familyAdultsCount: undefined,
+      familyChildrenCount: undefined,
       annualFamilyIncome: "",
-      numberOfDependents: undefined,
-      incomeSource: "",
-      familyDetailsUnchanged: false,
-      photo: null,
-      idProof: null,
-      incomeCertificate: null,
-      tenthMarksheet: null,
-      currentYearMarksheet: null,
-      whyNeedScholarship: "",
-      educationalGoals: "",
-      careerAspirations: "",
-      progressReport: "",
-      challengesFaced: "",
+
+      // Education (common)
+      highSchoolStudied: "",
+      sscTotalMarks: undefined,
+      sscMaxMarks: undefined,
+      sscPercentage: undefined,
+      collegeAddress: "",
+      groupSubjects: "",
+
+      // Education (1st year specific)
+      collegeAdmitted: "",
+      courseJoined: "",
+      dateOfAdmission: "",
+
+      // Education (2nd year specific)
+      currentCollege: "",
+      courseStudying: "",
+      firstYearTotalMarks: undefined,
+      firstYearMaxMarks: undefined,
+      firstYearPercentage: undefined,
+
+      // Bank Details
+      bankAccountNumber: "",
+      bankNameBranch: "",
+      ifscCode: "",
+
+      // Documents (1st year)
+      sscMarksheet: null,
+      aadharStudent: null,
+      aadharParent: null,
+      bonafideCertificate: null,
+      bankPassbook: null,
+
+      // Documents (2nd year)
+      firstYearMarksheet: null,
+      mangoPlantPhoto: null,
+
+      // Essays (2nd year only)
+      studyActivities: "",
+      goalsDreams: "",
+      additionalInfo: "",
     },
   })
 
-  const { trigger, getValues, reset, formState: { errors } } = methods
+  const { trigger, getValues, reset } = methods
 
+  // Load draft from localStorage
   useEffect(() => {
     const storageKey = `${STORAGE_KEY_PREFIX}${applicationType}`
     const savedDraft = localStorage.getItem(storageKey)
@@ -139,17 +142,21 @@ export function ApplicationWizard() {
     }
   }, [applicationType, reset])
 
+  // Save draft to localStorage
   const saveDraft = useCallback(() => {
     setIsSaving(true)
     const storageKey = `${STORAGE_KEY_PREFIX}${applicationType}`
     const data = getValues()
 
+    // Exclude file objects from saving
     const {
-      photo,
-      idProof,
-      incomeCertificate,
-      tenthMarksheet,
-      currentYearMarksheet,
+      sscMarksheet,
+      aadharStudent,
+      aadharParent,
+      bonafideCertificate,
+      bankPassbook,
+      firstYearMarksheet,
+      mangoPlantPhoto,
       ...dataToSave
     } = data
 
@@ -162,12 +169,14 @@ export function ApplicationWizard() {
     setTimeout(() => setIsSaving(false), 500)
   }, [applicationType, currentStep, getValues])
 
+  // Auto-save on step change
   useEffect(() => {
     if (currentStep > 0) {
       saveDraft()
     }
   }, [currentStep, saveDraft])
 
+  // Handle application type change
   const handleTypeChange = (type: ApplicationType) => {
     if (type !== applicationType) {
       saveDraft()
@@ -176,37 +185,21 @@ export function ApplicationWizard() {
     }
   }
 
-  const getFieldsForStep = (step: number): string[] => {
-    const isFirstYear = applicationType === "first-year"
+  // Get required fields for the current step (excluding optional fields for validation)
+  const getRequiredFieldsForStep = (step: number): string[] => {
+    const allFields = getStepFields(step, applicationType)
 
-    switch (step) {
-      case 0:
-        return ["fullName", "email", "phone", "address", "city", "state", "pincode", "dateOfBirth"]
-      case 1:
-        return isFirstYear
-          ? ["currentInstitution", "institutionType", "classOrYear", "fieldOfStudy", "boardOrUniversity", "previousMarksPercentage", "previousMarksType"]
-          : ["currentInstitution", "institutionType", "classOrYear", "fieldOfStudy", "boardOrUniversity", "currentYearMarks", "currentMarksType"]
-      case 2:
-        return isFirstYear
-          ? ["guardianName", "guardianRelation", "guardianPhone", "guardianOccupation", "annualFamilyIncome", "numberOfDependents", "incomeSource"]
-          : ["annualFamilyIncome"]
-      case 3:
-        return isFirstYear
-          ? ["photo", "idProof", "incomeCertificate", "tenthMarksheet"]
-          : ["incomeCertificate", "currentYearMarksheet"]
-      case 4:
-        return isFirstYear
-          ? ["whyNeedScholarship", "educationalGoals", "careerAspirations"]
-          : ["progressReport", "educationalGoals"]
-      case 5:
-        return []
-      default:
-        return []
-    }
+    // Filter out optional fields for validation
+    const optionalFields = [
+      'guardianName', 'guardianRelationship', 'guardianDetails',
+      'additionalInfo', 'mangoPlantPhoto'
+    ]
+
+    return allFields.filter(field => !optionalFields.includes(field))
   }
 
   const handleNext = async () => {
-    const fields = getFieldsForStep(currentStep)
+    const fields = getRequiredFieldsForStep(currentStep)
     const isValid = await trigger(fields as any)
 
     if (isValid) {
@@ -275,7 +268,7 @@ export function ApplicationWizard() {
               Application Submitted!
             </h2>
             <p className="text-gray-600 mb-8 max-w-sm mx-auto">
-              Thank you for applying. We'll review your application and get back to you within 7-10 business days.
+              Thank you for applying. We&apos;ll review your application and get back to you within 7-10 business days.
             </p>
           </motion.div>
 
@@ -363,6 +356,7 @@ export function ApplicationWizard() {
           currentStep={currentStep}
           totalSteps={STEPS.length}
           steps={STEPS}
+          onStepClick={goToStep}
         />
 
         {/* Step Content */}
@@ -376,11 +370,11 @@ export function ApplicationWizard() {
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.25 }}
               >
-                {currentStep === 0 && <PersonalInfoStep />}
-                {currentStep === 1 && <EducationStep applicationType={applicationType} />}
-                {currentStep === 2 && <FamilyBackgroundStep applicationType={applicationType} />}
-                {currentStep === 3 && <DocumentsStep applicationType={applicationType} />}
-                {currentStep === 4 && <StatementStep applicationType={applicationType} />}
+                {currentStep === 0 && <PersonalInfoStep applicationType={applicationType} />}
+                {currentStep === 1 && <FamilyBackgroundStep applicationType={applicationType} />}
+                {currentStep === 2 && <EducationStep applicationType={applicationType} />}
+                {currentStep === 3 && <BankDetailsStep />}
+                {currentStep === 4 && <DocumentsStep applicationType={applicationType} />}
                 {currentStep === 5 && (
                   <ReviewStep
                     applicationType={applicationType}
@@ -390,7 +384,6 @@ export function ApplicationWizard() {
               </motion.div>
             </AnimatePresence>
           </div>
-
         </div>
 
         {/* Navigation */}
@@ -418,35 +411,35 @@ export function ApplicationWizard() {
               </span>
             )}
 
-          {currentStep < STEPS.length - 1 ? (
-            <Button
-              type="button"
-              onClick={handleNext}
-              className="flex items-center gap-2 bg-gradient-to-r from-primary to-orange-500 hover:from-primary/90 hover:to-orange-500/90 rounded-xl px-5 shadow-md shadow-primary/20 transition-all hover:shadow-lg hover:shadow-primary/25 hover:-translate-y-0.5"
-            >
-              Continue
-              <ArrowRight className="w-4 h-4" />
-            </Button>
-          ) : (
-            <Button
-              type="button"
-              onClick={handleSubmit}
-              disabled={isSubmitting}
-              className="flex items-center gap-2 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 rounded-xl px-5 shadow-md shadow-green-500/20 transition-all hover:shadow-lg hover:shadow-green-500/25 hover:-translate-y-0.5 disabled:opacity-70 disabled:cursor-not-allowed"
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Submitting...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-4 h-4" />
-                  Submit
-                </>
-              )}
-            </Button>
-          )}
+            {currentStep < STEPS.length - 1 ? (
+              <Button
+                type="button"
+                onClick={handleNext}
+                className="flex items-center gap-2 bg-gradient-to-r from-primary to-orange-500 hover:from-primary/90 hover:to-orange-500/90 rounded-xl px-5 shadow-md shadow-primary/20 transition-all hover:shadow-lg hover:shadow-primary/25 hover:-translate-y-0.5"
+              >
+                Continue
+                <ArrowRight className="w-4 h-4" />
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                onClick={handleSubmit}
+                disabled={isSubmitting}
+                className="flex items-center gap-2 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 rounded-xl px-5 shadow-md shadow-green-500/20 transition-all hover:shadow-lg hover:shadow-green-500/25 hover:-translate-y-0.5 disabled:opacity-70 disabled:cursor-not-allowed"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Submitting...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    Submit
+                  </>
+                )}
+              </Button>
+            )}
           </div>
         </div>
       </div>

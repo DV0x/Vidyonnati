@@ -9,72 +9,165 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Checkbox } from "@/components/ui/checkbox"
-import { type ApplicationType, guardianRelations } from "@/lib/schemas/application"
+import { type ApplicationType, incomeBrackets, incomeBracketLabels } from "@/lib/schemas/application"
+import { Users, User, Info, IndianRupee } from "lucide-react"
 
 interface FamilyBackgroundStepProps {
   applicationType: ApplicationType
-}
-
-const incomeRanges = [
-  { value: "below-1-lakh", label: "Below ₹1,00,000" },
-  { value: "1-2-lakh", label: "₹1,00,000 - ₹2,00,000" },
-  { value: "2-3-lakh", label: "₹2,00,000 - ₹3,00,000" },
-  { value: "3-5-lakh", label: "₹3,00,000 - ₹5,00,000" },
-  { value: "above-5-lakh", label: "Above ₹5,00,000" },
-]
-
-const relationLabels: Record<string, string> = {
-  father: "Father",
-  mother: "Mother",
-  guardian: "Guardian",
-  other: "Other",
 }
 
 export function FamilyBackgroundStep({ applicationType }: FamilyBackgroundStepProps) {
   const { register, setValue, watch, formState: { errors } } = useFormContext()
 
   const isFirstYear = applicationType === "first-year"
-  const familyDetailsUnchanged = watch("familyDetailsUnchanged")
-  const guardianRelation = watch("guardianRelation")
-  const annualFamilyIncome = watch("annualFamilyIncome")
-
-  const showFullForm = isFirstYear || !familyDetailsUnchanged
+  const isSecondYear = applicationType === "second-year"
 
   return (
-    <div className="space-y-4">
-      {/* Second Year: Unchanged checkbox */}
-      {!isFirstYear && (
-        <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
-          <div className="flex items-start gap-3">
-            <Checkbox
-              id="familyDetailsUnchanged"
-              checked={familyDetailsUnchanged}
-              onCheckedChange={(checked) => setValue("familyDetailsUnchanged", checked)}
-              className="mt-0.5"
-            />
-            <div>
-              <label htmlFor="familyDetailsUnchanged" className="text-sm font-medium text-blue-900 cursor-pointer">
-                My family details are unchanged from last year
-              </label>
-              <p className="text-xs text-blue-700 mt-1">
-                Check this if your guardian and family situation is the same
-              </p>
-            </div>
-          </div>
+    <div className="space-y-6">
+      {/* Mother's Details Section */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
+          <User className="w-4 h-4 text-pink-500" />
+          <h3 className="text-sm font-medium text-gray-700">Mother&apos;s Details</h3>
         </div>
-      )}
 
-      {/* Guardian Details */}
-      {showFullForm && (
-        <>
-          {/* Guardian Name & Relation */}
+        {isFirstYear ? (
+          /* First Year: Just name */
+          <div>
+            <AnimatedInput
+              label="Mother's Full Name"
+              {...register("motherName")}
+              value={watch("motherName") || ""}
+              onChange={(e) => setValue("motherName", e.target.value, { shouldValidate: true })}
+            />
+            {errors.motherName && (
+              <p className="text-red-500 text-xs mt-1">{errors.motherName.message as string}</p>
+            )}
+          </div>
+        ) : (
+          /* Second Year: Name, Occupation, Mobile */
+          <>
+            <div>
+              <AnimatedInput
+                label="Mother's Full Name"
+                {...register("motherName")}
+                value={watch("motherName") || ""}
+                onChange={(e) => setValue("motherName", e.target.value, { shouldValidate: true })}
+              />
+              {errors.motherName && (
+                <p className="text-red-500 text-xs mt-1">{errors.motherName.message as string}</p>
+              )}
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <AnimatedInput
+                  label="Mother's Occupation"
+                  placeholder="e.g., Housewife, Teacher"
+                  {...register("motherOccupation")}
+                  value={watch("motherOccupation") || ""}
+                  onChange={(e) => setValue("motherOccupation", e.target.value, { shouldValidate: true })}
+                />
+                {errors.motherOccupation && (
+                  <p className="text-red-500 text-xs mt-1">{errors.motherOccupation.message as string}</p>
+                )}
+              </div>
+              <div>
+                <AnimatedInput
+                  type="tel"
+                  label="Mother's Mobile Number"
+                  {...register("motherMobile")}
+                  value={watch("motherMobile") || ""}
+                  onChange={(e) => setValue("motherMobile", e.target.value, { shouldValidate: true })}
+                />
+                {errors.motherMobile && (
+                  <p className="text-red-500 text-xs mt-1">{errors.motherMobile.message as string}</p>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Father's Details Section */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
+          <User className="w-4 h-4 text-blue-500" />
+          <h3 className="text-sm font-medium text-gray-700">Father&apos;s Details</h3>
+        </div>
+
+        {isFirstYear ? (
+          /* First Year: Just name */
+          <div>
+            <AnimatedInput
+              label="Father's Full Name"
+              {...register("fatherName")}
+              value={watch("fatherName") || ""}
+              onChange={(e) => setValue("fatherName", e.target.value, { shouldValidate: true })}
+            />
+            {errors.fatherName && (
+              <p className="text-red-500 text-xs mt-1">{errors.fatherName.message as string}</p>
+            )}
+          </div>
+        ) : (
+          /* Second Year: Name, Occupation, Mobile */
+          <>
+            <div>
+              <AnimatedInput
+                label="Father's Full Name"
+                {...register("fatherName")}
+                value={watch("fatherName") || ""}
+                onChange={(e) => setValue("fatherName", e.target.value, { shouldValidate: true })}
+              />
+              {errors.fatherName && (
+                <p className="text-red-500 text-xs mt-1">{errors.fatherName.message as string}</p>
+              )}
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <AnimatedInput
+                  label="Father's Occupation"
+                  placeholder="e.g., Farmer, Driver"
+                  {...register("fatherOccupation")}
+                  value={watch("fatherOccupation") || ""}
+                  onChange={(e) => setValue("fatherOccupation", e.target.value, { shouldValidate: true })}
+                />
+                {errors.fatherOccupation && (
+                  <p className="text-red-500 text-xs mt-1">{errors.fatherOccupation.message as string}</p>
+                )}
+              </div>
+              <div>
+                <AnimatedInput
+                  type="tel"
+                  label="Father's Mobile Number"
+                  {...register("fatherMobile")}
+                  value={watch("fatherMobile") || ""}
+                  onChange={(e) => setValue("fatherMobile", e.target.value, { shouldValidate: true })}
+                />
+                {errors.fatherMobile && (
+                  <p className="text-red-500 text-xs mt-1">{errors.fatherMobile.message as string}</p>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Guardian Details (Optional) */}
+      <div className="bg-gray-50 rounded-xl p-4 space-y-4">
+        <div className="flex items-center gap-2">
+          <Info className="w-4 h-4 text-gray-500" />
+          <p className="text-sm text-gray-600">
+            Guardian Details <span className="text-xs text-gray-400">(if parents are not alive)</span>
+          </p>
+        </div>
+
+        {isFirstYear ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <AnimatedInput
-                label="Guardian's Full Name"
+                label="Guardian's Name (Optional)"
                 {...register("guardianName")}
-                value={watch("guardianName")}
+                value={watch("guardianName") || ""}
                 onChange={(e) => setValue("guardianName", e.target.value, { shouldValidate: true })}
               />
               {errors.guardianName && (
@@ -82,134 +175,117 @@ export function FamilyBackgroundStep({ applicationType }: FamilyBackgroundStepPr
               )}
             </div>
             <div>
+              <AnimatedInput
+                label="Relationship (Optional)"
+                placeholder="e.g., Uncle, Grandfather"
+                {...register("guardianRelationship")}
+                value={watch("guardianRelationship") || ""}
+                onChange={(e) => setValue("guardianRelationship", e.target.value, { shouldValidate: true })}
+              />
+              {errors.guardianRelationship && (
+                <p className="text-red-500 text-xs mt-1">{errors.guardianRelationship.message as string}</p>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div>
+            <AnimatedInput
+              label="Guardian Details (Optional)"
+              placeholder="Name, relationship, and contact if applicable"
+              {...register("guardianDetails")}
+              value={watch("guardianDetails") || ""}
+              onChange={(e) => setValue("guardianDetails", e.target.value, { shouldValidate: true })}
+            />
+            {errors.guardianDetails && (
+              <p className="text-red-500 text-xs mt-1">{errors.guardianDetails.message as string}</p>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Second Year Only: Family Members & Income */}
+      {isSecondYear && (
+        <>
+          {/* Family Members Count */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
+              <Users className="w-4 h-4 text-green-500" />
+              <h3 className="text-sm font-medium text-gray-700">Family Members</h3>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <AnimatedInput
+                  type="number"
+                  label="Number of Adults"
+                  min={1}
+                  max={20}
+                  value={watch("familyAdultsCount") ?? ""}
+                  onChange={(e) => {
+                    const val = e.target.value === "" ? undefined : parseInt(e.target.value)
+                    setValue("familyAdultsCount", Number.isNaN(val) ? undefined : val, { shouldValidate: true })
+                  }}
+                />
+                {errors.familyAdultsCount && (
+                  <p className="text-red-500 text-xs mt-1">{errors.familyAdultsCount.message as string}</p>
+                )}
+              </div>
+              <div>
+                <AnimatedInput
+                  type="number"
+                  label="Number of Children"
+                  min={0}
+                  max={15}
+                  value={watch("familyChildrenCount") ?? ""}
+                  onChange={(e) => {
+                    const val = e.target.value === "" ? 0 : parseInt(e.target.value)
+                    setValue("familyChildrenCount", Number.isNaN(val) ? 0 : val, { shouldValidate: true })
+                  }}
+                />
+                {errors.familyChildrenCount && (
+                  <p className="text-red-500 text-xs mt-1">{errors.familyChildrenCount.message as string}</p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Annual Family Income */}
+          <div className="bg-orange-50 rounded-xl p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <IndianRupee className="w-4 h-4 text-orange-600" />
+              <p className="text-sm font-medium text-gray-700">
+                Annual Family Income (Approx.)
+              </p>
+            </div>
+            <div>
               <div className="relative">
                 <Select
-                  value={guardianRelation}
-                  onValueChange={(value) => setValue("guardianRelation", value, { shouldValidate: true })}
+                  value={watch("annualFamilyIncome") || ""}
+                  onValueChange={(value) => setValue("annualFamilyIncome", value, { shouldValidate: true })}
                 >
-                  <SelectTrigger className="h-[52px] pt-5 pb-2 px-3 text-sm border-gray-300 focus:ring-2 focus:ring-primary/20 focus:border-primary rounded-lg">
+                  <SelectTrigger className="h-[52px] pt-5 pb-2 px-3 text-sm border-gray-300 focus:ring-2 focus:ring-primary/20 focus:border-primary rounded-lg bg-white">
                     <SelectValue placeholder="" />
                   </SelectTrigger>
                   <SelectContent>
-                    {guardianRelations.map((relation) => (
-                      <SelectItem key={relation} value={relation}>
-                        {relationLabels[relation]}
+                    {incomeBrackets.map((bracket) => (
+                      <SelectItem key={bracket} value={bracket}>
+                        {incomeBracketLabels[bracket]}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
                 <label className={`absolute left-3 pointer-events-none transition-all ${
-                  guardianRelation ? "top-2 text-xs text-gray-500" : "top-1/2 -translate-y-1/2 text-sm text-gray-400"
+                  watch("annualFamilyIncome") ? "top-2 text-xs text-gray-500" : "top-1/2 -translate-y-1/2 text-sm text-gray-400"
                 }`}>
-                  Relationship
+                  Select Income Range
                 </label>
               </div>
-              {errors.guardianRelation && (
-                <p className="text-red-500 text-xs mt-1">{errors.guardianRelation.message as string}</p>
-              )}
-            </div>
-          </div>
-
-          {/* Guardian Phone & Occupation */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <AnimatedInput
-                type="tel"
-                label="Guardian's Phone Number"
-                {...register("guardianPhone")}
-                value={watch("guardianPhone")}
-                onChange={(e) => setValue("guardianPhone", e.target.value, { shouldValidate: true })}
-              />
-              {errors.guardianPhone && (
-                <p className="text-red-500 text-xs mt-1">{errors.guardianPhone.message as string}</p>
-              )}
-            </div>
-            <div>
-              <AnimatedInput
-                label="Guardian's Occupation"
-                placeholder="e.g., Farmer, Daily Wage Worker"
-                {...register("guardianOccupation")}
-                value={watch("guardianOccupation")}
-                onChange={(e) => setValue("guardianOccupation", e.target.value, { shouldValidate: true })}
-              />
-              {errors.guardianOccupation && (
-                <p className="text-red-500 text-xs mt-1">{errors.guardianOccupation.message as string}</p>
+              {errors.annualFamilyIncome && (
+                <p className="text-red-500 text-xs mt-1">{errors.annualFamilyIncome.message as string}</p>
               )}
             </div>
           </div>
         </>
-      )}
-
-      {/* Annual Income - Always shown */}
-      <div className="bg-orange-50 rounded-xl p-4 space-y-3">
-        <p className="text-sm font-medium text-gray-700">
-          Annual Family Income
-          {!isFirstYear && (
-            <span className="text-xs font-normal text-orange-600 ml-2">Required even if unchanged</span>
-          )}
-        </p>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <div className="relative">
-              <Select
-                value={annualFamilyIncome}
-                onValueChange={(value) => setValue("annualFamilyIncome", value, { shouldValidate: true })}
-              >
-                <SelectTrigger className="h-[52px] pt-5 pb-2 px-3 text-sm border-gray-300 focus:ring-2 focus:ring-primary/20 focus:border-primary rounded-lg bg-white">
-                  <SelectValue placeholder="" />
-                </SelectTrigger>
-                <SelectContent>
-                  {incomeRanges.map((range) => (
-                    <SelectItem key={range.value} value={range.value}>
-                      {range.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <label className={`absolute left-3 pointer-events-none transition-all ${
-                annualFamilyIncome ? "top-2 text-xs text-gray-500" : "top-1/2 -translate-y-1/2 text-sm text-gray-400"
-              }`}>
-                Income Range
-              </label>
-            </div>
-            {errors.annualFamilyIncome && (
-              <p className="text-red-500 text-xs mt-1">{errors.annualFamilyIncome.message as string}</p>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Additional fields for first year */}
-      {showFullForm && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <AnimatedInput
-              type="number"
-              label="Number of Family Dependents"
-              min={1}
-              max={15}
-              {...register("numberOfDependents", { valueAsNumber: true })}
-              value={watch("numberOfDependents") || ""}
-              onChange={(e) => setValue("numberOfDependents", parseInt(e.target.value) || undefined, { shouldValidate: true })}
-            />
-            {errors.numberOfDependents && (
-              <p className="text-red-500 text-xs mt-1">{errors.numberOfDependents.message as string}</p>
-            )}
-          </div>
-          <div>
-            <AnimatedInput
-              label="Primary Income Source"
-              placeholder="e.g., Agriculture, Small Business"
-              {...register("incomeSource")}
-              value={watch("incomeSource")}
-              onChange={(e) => setValue("incomeSource", e.target.value, { shouldValidate: true })}
-            />
-            {errors.incomeSource && (
-              <p className="text-red-500 text-xs mt-1">{errors.incomeSource.message as string}</p>
-            )}
-          </div>
-        </div>
       )}
     </div>
   )
