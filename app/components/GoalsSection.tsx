@@ -202,10 +202,10 @@ function GoalCard({ goal, index }: { goal: Goal; index: number }) {
 
 export default function GoalsSection() {
   return (
-    <section className="py-16 md:py-24 bg-gradient-to-b from-white to-orange-50/30 relative overflow-hidden">
-      {/* Background decoration */}
-      <div className="absolute top-1/2 left-0 w-[300px] h-[300px] bg-primary/5 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2" />
-      <div className="absolute top-1/2 right-0 w-[300px] h-[300px] bg-orange-100/50 rounded-full blur-3xl translate-x-1/2 -translate-y-1/2" />
+    <section className="py-16 md:py-24 bg-white relative overflow-hidden">
+      {/* Clean subtle decoration */}
+      <div className="absolute top-0 left-1/2 w-[800px] h-[400px] bg-gray-50/80 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2" />
+      <div className="absolute bottom-0 right-0 w-[300px] h-[300px] bg-orange-50/40 rounded-full blur-3xl translate-x-1/3 translate-y-1/3" />
 
       <div className="container mx-auto px-4 relative z-10">
         {/* Section Header */}

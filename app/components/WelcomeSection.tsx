@@ -24,9 +24,10 @@ const trustBadges = [
 
 export default function WelcomeSection() {
   return (
-    <section className="py-16 md:py-24 bg-white relative overflow-hidden">
-      {/* Subtle background decoration */}
-      <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-orange-50/50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+    <section className="py-16 md:py-24 bg-gradient-to-br from-orange-50/40 via-orange-50/20 to-white relative overflow-hidden">
+      {/* Warm background decoration */}
+      <div className="absolute top-0 left-0 w-[600px] h-[600px] bg-orange-100/30 rounded-full blur-3xl -translate-x-1/3 -translate-y-1/3" />
+      <div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-primary/5 rounded-full blur-3xl translate-x-1/4 translate-y-1/4" />
 
       <div className="container mx-auto px-4 relative z-10">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">

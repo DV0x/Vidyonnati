@@ -193,10 +193,17 @@ function PartnerCard({
 
 export default function WhySupportUsSection() {
   return (
-    <section className="py-16 md:py-24 bg-gradient-to-b from-orange-50/30 to-white relative overflow-hidden">
-      {/* Background decoration */}
-      <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-primary/5 rounded-full blur-3xl translate-x-1/2 -translate-y-1/2" />
-      <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-orange-100/50 rounded-full blur-3xl -translate-x-1/2 translate-y-1/2" />
+    <section className="py-16 md:py-24 bg-gradient-to-b from-orange-50/60 via-orange-50/40 to-orange-50/20 relative overflow-hidden">
+      {/* Subtle line pattern */}
+      <div className="absolute inset-0 opacity-40">
+        <div className="absolute inset-0" style={{
+          backgroundImage: `linear-gradient(to right, rgb(251 146 60 / 0.05) 1px, transparent 1px)`,
+          backgroundSize: '60px 100%'
+        }} />
+      </div>
+      {/* Warm decoration */}
+      <div className="absolute top-0 left-0 w-[500px] h-[500px] bg-orange-100/40 rounded-full blur-3xl -translate-x-1/3 -translate-y-1/3" />
+      <div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-primary/5 rounded-full blur-3xl translate-x-1/3 translate-y-1/3" />
 
       <div className="container mx-auto px-4 relative z-10">
         {/* Section Header */}
