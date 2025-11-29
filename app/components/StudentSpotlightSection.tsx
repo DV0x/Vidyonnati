@@ -1,11 +1,30 @@
 "use client"
 
 import { useState } from "react"
-import { motion, AnimatePresence } from "motion/react"
+import { motion } from "motion/react"
 import Image from "next/image"
 import Link from "next/link"
-import { GraduationCap, ArrowRight, MapPin, BookOpen, Award, BadgeCheck, X, Send, Phone, Mail, User } from "lucide-react"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { GraduationCap, ArrowRight, MapPin, BookOpen, Award, BadgeCheck, Send, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Label } from "@/components/ui/label"
+import { AnimatedInput } from "@/app/components/AnimatedInput"
+import { helpInterestSchema, type HelpInterest, helpTypes } from "@/lib/schemas/application"
 
 interface Student {
   id: string
@@ -63,175 +82,184 @@ const students: Student[] = [
   },
 ]
 
-function InterestModal({
+const helpTypeLabels: Record<string, string> = {
+  donate: "I want to donate",
+  volunteer: "I want to volunteer",
+  corporate: "Corporate partnership",
+  other: "Other",
+}
+
+function HelpInterestDialog({
   student,
-  isOpen,
-  onClose
+  open,
+  onOpenChange
 }: {
   student: Student | null
-  isOpen: boolean
-  onClose: () => void
+  open: boolean
+  onOpenChange: (open: boolean) => void
 }) {
-  const [formState, setFormState] = useState({ name: "", email: "", phone: "" })
-  const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSubmitted, setIsSubmitted] = useState(false)
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsSubmitting(true)
-    // Simulate submission - replace with actual form handling
-    setTimeout(() => {
-      setIsSubmitting(false)
-      setIsSubmitted(true)
-    }, 1000)
+  const form = useForm<HelpInterest>({
+    resolver: zodResolver(helpInterestSchema),
+    defaultValues: {
+      name: "",
+      email: "",
+      phone: "",
+      helpType: undefined,
+      message: "",
+    },
+  })
+
+  const { isSubmitting } = form.formState
+
+  const onSubmit = async (data: HelpInterest) => {
+    // Simulate API call
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    console.log("Help interest submitted:", { ...data, studentId: student?.id })
+    setIsSubmitted(true)
   }
 
-  const resetAndClose = () => {
-    setFormState({ name: "", email: "", phone: "" })
+  const handleClose = () => {
+    form.reset()
     setIsSubmitted(false)
-    onClose()
+    onOpenChange(false)
   }
 
   if (!student) return null
 
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <>
-          {/* Backdrop */}
-          <motion.div
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={resetAndClose}
-          />
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="max-w-md p-0 overflow-hidden gap-0">
+        {/* Custom Header with Gradient */}
+        <div className="bg-gradient-to-r from-primary to-orange-500 p-5 text-white">
+          <DialogHeader className="space-y-1">
+            <DialogDescription className="text-orange-100 text-sm">
+              Express interest to support
+            </DialogDescription>
+            <DialogTitle className="text-xl font-bold text-white">
+              {student.name}
+            </DialogTitle>
+            <p className="text-orange-100 text-sm">{student.field} • {student.year}</p>
+          </DialogHeader>
+        </div>
 
-          {/* Modal */}
-          <motion.div
-            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white rounded-2xl shadow-2xl z-50 overflow-hidden"
-            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            transition={{ duration: 0.2 }}
-          >
-            {/* Header */}
-            <div className="bg-gradient-to-r from-primary to-orange-500 p-5 text-white relative">
-              <button
-                onClick={resetAndClose}
-                className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30 transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-              <p className="text-orange-100 text-sm mb-1">Express interest to support</p>
-              <h3 className="text-xl font-bold">{student.name}</h3>
-              <p className="text-orange-100 text-sm">{student.field} • {student.year}</p>
-            </div>
+        {/* Body */}
+        <div className="p-6">
+          {!isSubmitted ? (
+            <>
+              <p className="text-gray-600 text-sm mb-5">
+                Share your details and our team will connect with you to discuss how you can support {student.name.split(' ')[0]}'s education journey.
+              </p>
 
-            {/* Body */}
-            <div className="p-6">
-              {!isSubmitted ? (
-                <>
-                  <p className="text-gray-600 text-sm mb-5">
-                    Share your details and our team will connect with you to discuss how you can support {student.name.split(' ')[0]}'s education journey.
-                  </p>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                {/* Name Field */}
+                <div>
+                  <AnimatedInput
+                    type="text"
+                    label="Your Name"
+                    value={form.watch("name")}
+                    onChange={(e) => form.setValue("name", e.target.value, { shouldValidate: true })}
+                  />
+                  {form.formState.errors.name && (
+                    <p className="text-red-500 text-sm mt-1">{form.formState.errors.name.message}</p>
+                  )}
+                </div>
 
-                  <form onSubmit={handleSubmit} className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Your Name</label>
-                      <div className="relative">
-                        <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                        <input
-                          type="text"
-                          required
-                          value={formState.name}
-                          onChange={(e) => setFormState({ ...formState, name: e.target.value })}
-                          className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
-                          placeholder="Enter your name"
-                        />
-                      </div>
-                    </div>
+                {/* Email Field */}
+                <div>
+                  <AnimatedInput
+                    type="email"
+                    label="Email Address"
+                    value={form.watch("email")}
+                    onChange={(e) => form.setValue("email", e.target.value, { shouldValidate: true })}
+                  />
+                  {form.formState.errors.email && (
+                    <p className="text-red-500 text-sm mt-1">{form.formState.errors.email.message}</p>
+                  )}
+                </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
-                      <div className="relative">
-                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                        <input
-                          type="email"
-                          required
-                          value={formState.email}
-                          onChange={(e) => setFormState({ ...formState, email: e.target.value })}
-                          className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
-                          placeholder="your@email.com"
-                        />
-                      </div>
-                    </div>
+                {/* Phone Field */}
+                <div>
+                  <AnimatedInput
+                    type="tel"
+                    label="Phone Number"
+                    value={form.watch("phone")}
+                    onChange={(e) => form.setValue("phone", e.target.value, { shouldValidate: true })}
+                  />
+                  {form.formState.errors.phone && (
+                    <p className="text-red-500 text-sm mt-1">{form.formState.errors.phone.message}</p>
+                  )}
+                </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
-                      <div className="relative">
-                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                        <input
-                          type="tel"
-                          required
-                          value={formState.phone}
-                          onChange={(e) => setFormState({ ...formState, phone: e.target.value })}
-                          className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
-                          placeholder="+91 98765 43210"
-                        />
-                      </div>
-                    </div>
-
-                    <Button
-                      type="submit"
-                      disabled={isSubmitting}
-                      className="w-full bg-primary hover:bg-primary/90 text-white rounded-full py-6 font-semibold mt-2"
-                    >
-                      {isSubmitting ? (
-                        <span className="flex items-center gap-2">
-                          <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                          </svg>
-                          Submitting...
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-2">
-                          <Send className="w-4 h-4" />
-                          Submit Interest
-                        </span>
-                      )}
-                    </Button>
-                  </form>
-                </>
-              ) : (
-                <motion.div
-                  className="text-center py-6"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                >
-                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <BadgeCheck className="w-8 h-8 text-green-600" />
-                  </div>
-                  <h4 className="text-xl font-bold text-gray-900 mb-2">Thank You!</h4>
-                  <p className="text-gray-600 text-sm">
-                    We've received your interest in supporting {student.name.split(' ')[0]}.
-                    Our team will reach out within 24-48 hours.
-                  </p>
-                  <Button
-                    onClick={resetAndClose}
-                    variant="outline"
-                    className="mt-6 rounded-full"
+                {/* Help Type Dropdown */}
+                <div>
+                  <Label className="text-sm text-gray-600 mb-2 block">How would you like to help?</Label>
+                  <Select
+                    onValueChange={(value) => form.setValue("helpType", value as any, { shouldValidate: true })}
+                    value={form.watch("helpType")}
                   >
-                    Close
-                  </Button>
-                </motion.div>
-              )}
-            </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select an option" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {helpTypes.map((type) => (
+                        <SelectItem key={type} value={type}>
+                          {helpTypeLabels[type]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {form.formState.errors.helpType && (
+                    <p className="text-red-500 text-sm mt-1">{form.formState.errors.helpType.message}</p>
+                  )}
+                </div>
+
+                <Button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="w-full mt-6 text-lg py-6 bg-primary hover:bg-primary/90 transition-all duration-300 transform hover:scale-105 hover:shadow-lg active:scale-95 donate-button"
+                >
+                  {isSubmitting ? (
+                    <span className="flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Submitting...
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      <Send className="w-4 h-4" />
+                      Submit Interest
+                    </span>
+                  )}
+                </Button>
+              </form>
+            </>
+          ) : (
+            <motion.div
+              className="text-center py-6"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <BadgeCheck className="w-8 h-8 text-green-600" />
+              </div>
+              <h4 className="text-xl font-bold text-gray-900 mb-2">Thank You!</h4>
+              <p className="text-gray-600 text-sm">
+                We've received your interest in supporting {student.name.split(' ')[0]}.
+                Our team will reach out within 24-48 hours.
+              </p>
+              <Button
+                onClick={handleClose}
+                variant="outline"
+                className="mt-6 rounded-full"
+              >
+                Close
+              </Button>
+            </motion.div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -414,10 +442,10 @@ export default function StudentSpotlightSection() {
       </section>
 
       {/* Interest Modal */}
-      <InterestModal
+      <HelpInterestDialog
         student={selectedStudent}
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        open={isModalOpen}
+        onOpenChange={setIsModalOpen}
       />
     </>
   )

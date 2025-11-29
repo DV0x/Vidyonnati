@@ -3,33 +3,56 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { motion } from "motion/react"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
-import { Label } from "@/components/ui/label"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Button } from "@/components/ui/button"
 import { AnimatedInput } from "@/app/components/AnimatedInput"
 import { toast } from "@/components/ui/use-toast"
 import { useDonorContext } from "@/app/context/DonorContext"
+import { Check } from "lucide-react"
+
+const PRESET_AMOUNTS = [
+  { value: "500", label: "₹500" },
+  { value: "1000", label: "₹1,000" },
+  { value: "2000", label: "₹2,000" },
+  { value: "5000", label: "₹5,000" },
+]
 
 export default function DonatePage() {
   const router = useRouter()
   const { setDonorInfo } = useDonorContext()
   const [amount, setAmount] = useState("")
   const [customAmount, setCustomAmount] = useState("")
+  const [isCustom, setIsCustom] = useState(false)
   const [donorName, setDonorName] = useState("")
   const [donorEmail, setDonorEmail] = useState("")
   const [donorPhone, setDonorPhone] = useState("")
   const [errors, setErrors] = useState<{ [key: string]: string }>({})
 
+  const handleAmountSelect = (value: string) => {
+    setAmount(value)
+    setIsCustom(false)
+    setCustomAmount("")
+    setErrors({ ...errors, amount: "", customAmount: "" })
+  }
+
+  const handleCustomClick = () => {
+    setIsCustom(true)
+    setAmount("")
+    setErrors({ ...errors, amount: "" })
+  }
+
   const validateForm = () => {
     const newErrors: { [key: string]: string } = {}
 
-    if (!amount) {
-      newErrors.amount = "Please select an amount"
+    if (!amount && !customAmount) {
+      newErrors.amount = "Please select or enter an amount"
     }
 
-    if (amount === "custom" && !customAmount) {
-      newErrors.customAmount = "Please enter a custom amount"
+    if (isCustom && !customAmount) {
+      newErrors.customAmount = "Please enter an amount"
+    }
+
+    if (isCustom && customAmount && parseInt(customAmount) < 100) {
+      newErrors.customAmount = "Minimum amount is ₹100"
     }
 
     if (!donorName.trim()) {
@@ -39,13 +62,13 @@ export default function DonatePage() {
     if (!donorEmail.trim()) {
       newErrors.donorEmail = "Please enter your email"
     } else if (!/\S+@\S+\.\S+/.test(donorEmail)) {
-      newErrors.donorEmail = "Please enter a valid email address"
+      newErrors.donorEmail = "Please enter a valid email"
     }
 
     if (!donorPhone.trim()) {
       newErrors.donorPhone = "Please enter your phone number"
     } else if (!/^\d{10}$/.test(donorPhone)) {
-      newErrors.donorPhone = "Please enter a valid 10-digit phone number"
+      newErrors.donorPhone = "Enter a valid 10-digit number"
     }
 
     setErrors(newErrors)
@@ -55,7 +78,7 @@ export default function DonatePage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (validateForm()) {
-      const finalAmount = amount === "custom" ? customAmount : amount
+      const finalAmount = isCustom ? customAmount : amount
       setDonorInfo({
         name: donorName,
         email: donorEmail,
@@ -73,114 +96,164 @@ export default function DonatePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white py-12 px-4 sm:px-6 lg:px-8">
-      <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="max-w-md mx-auto"
-      >
-        <Card className="w-full shadow-2xl border border-gray-100 hover:border-primary/20 transition-all duration-300">
-          <CardHeader className="space-y-2">
-            <CardTitle className="text-3xl font-bold text-center text-primary">Donate to Educate</CardTitle>
-            <CardDescription className="text-center text-lg">
-              Your contribution can change a student's life. Choose an amount to donate.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit}>
-              <div className="space-y-4">
-                <RadioGroup
-                  value={amount}
-                  onValueChange={(value) => {
-                    setAmount(value)
-                    setErrors({ ...errors, amount: "", customAmount: "" })
-                  }}
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-orange-50/30 to-rose-50/40 relative overflow-hidden">
+      {/* Background decoration */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -right-40 w-[500px] h-[500px] bg-gradient-to-br from-primary/20 via-orange-300/30 to-rose-300/20 rounded-full blur-3xl" />
+        <div className="absolute bottom-0 -left-32 w-[400px] h-[400px] bg-gradient-to-tr from-blue-200/20 via-purple-200/20 to-primary/10 rounded-full blur-3xl" />
+      </div>
+
+      <div className="relative px-4 py-8 sm:py-12">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="max-w-md mx-auto"
+        >
+          {/* Header */}
+          <div className="text-center mb-6">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+              Donate to Educate
+            </h1>
+            <p className="text-gray-500 mt-2 text-sm sm:text-base">
+              Your contribution changes a student's life
+            </p>
+          </div>
+
+          {/* Form Card */}
+          <div className="bg-white/80 backdrop-blur-xl rounded-2xl border border-white/50 shadow-xl p-5 sm:p-6">
+            <form onSubmit={handleSubmit} className="space-y-5">
+              {/* Amount Selection */}
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-3 block">
+                  Select Amount
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  {PRESET_AMOUNTS.map((preset) => (
+                    <button
+                      key={preset.value}
+                      type="button"
+                      onClick={() => handleAmountSelect(preset.value)}
+                      className={`relative py-4 px-4 rounded-xl border-2 text-center font-semibold transition-all duration-200 ${
+                        amount === preset.value && !isCustom
+                          ? "border-primary bg-primary/5 text-primary"
+                          : "border-gray-200 text-gray-700 hover:border-gray-300 hover:bg-gray-50"
+                      }`}
+                    >
+                      {amount === preset.value && !isCustom && (
+                        <div className="absolute top-2 right-2 w-5 h-5 bg-primary rounded-full flex items-center justify-center">
+                          <Check className="w-3 h-3 text-white" strokeWidth={3} />
+                        </div>
+                      )}
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Custom Amount */}
+                <button
+                  type="button"
+                  onClick={handleCustomClick}
+                  className={`w-full mt-3 py-3 px-4 rounded-xl border-2 text-center font-medium transition-all duration-200 ${
+                    isCustom
+                      ? "border-primary bg-primary/5 text-primary"
+                      : "border-gray-200 text-gray-600 hover:border-gray-300"
+                  }`}
                 >
-                  <div className="flex justify-between">
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="500" id="r1" />
-                      <Label htmlFor="r1">₹500</Label>
+                  {isCustom ? "Enter Custom Amount" : "Other Amount"}
+                </button>
+
+                {isCustom && (
+                  <div className="mt-3">
+                    <div className="relative">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-medium">₹</span>
+                      <input
+                        type="number"
+                        placeholder="Enter amount"
+                        value={customAmount}
+                        onChange={(e) => {
+                          setCustomAmount(e.target.value)
+                          setErrors({ ...errors, customAmount: "" })
+                        }}
+                        className="w-full pl-10 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 text-lg font-medium"
+                        min="100"
+                      />
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="1000" id="r2" />
-                      <Label htmlFor="r2">₹1,000</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="2000" id="r3" />
-                      <Label htmlFor="r3">₹2,000</Label>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-2 mt-4">
-                    <RadioGroupItem value="custom" id="r4" />
-                    <Label htmlFor="r4">Custom Amount</Label>
-                  </div>
-                </RadioGroup>
-                {errors.amount && <p className="text-red-500 text-sm">{errors.amount}</p>}
-                {amount === "custom" && (
-                  <div>
-                    <AnimatedInput
-                      type="number"
-                      label="Enter custom amount"
-                      value={customAmount}
-                      onChange={(e) => {
-                        setCustomAmount(e.target.value)
-                        setErrors({ ...errors, customAmount: "" })
-                      }}
-                      className="mt-2"
-                    />
-                    {errors.customAmount && <p className="text-red-500 text-sm">{errors.customAmount}</p>}
+                    {errors.customAmount && (
+                      <p className="text-red-500 text-xs mt-1">{errors.customAmount}</p>
+                    )}
                   </div>
                 )}
-                <AnimatedInput
-                  type="text"
-                  label="Full Name"
-                  required
-                  value={donorName}
-                  onChange={(e) => {
-                    setDonorName(e.target.value)
-                    setErrors({ ...errors, donorName: "" })
-                  }}
-                />
-                {errors.donorName && <p className="text-red-500 text-sm">{errors.donorName}</p>}
-                <AnimatedInput
-                  type="email"
-                  label="Email Address"
-                  required
-                  value={donorEmail}
-                  onChange={(e) => {
-                    setDonorEmail(e.target.value)
-                    setErrors({ ...errors, donorEmail: "" })
-                  }}
-                />
-                {errors.donorEmail && <p className="text-red-500 text-sm">{errors.donorEmail}</p>}
-                <AnimatedInput
-                  type="tel"
-                  label="Phone Number"
-                  required
-                  value={donorPhone}
-                  onChange={(e) => {
-                    setDonorPhone(e.target.value)
-                    setErrors({ ...errors, donorPhone: "" })
-                  }}
-                />
-                {errors.donorPhone && <p className="text-red-500 text-sm">{errors.donorPhone}</p>}
-                <Button
-                  type="submit"
-                  className="w-full mt-6 text-lg py-6 bg-primary hover:bg-primary/90 transition-all duration-300 transform hover:scale-105 hover:shadow-lg active:scale-95 donate-button"
-                >
-                  Proceed to Payment
-                </Button>
+
+                {errors.amount && (
+                  <p className="text-red-500 text-xs mt-2">{errors.amount}</p>
+                )}
               </div>
+
+              {/* Donor Details */}
+              <div className="space-y-4 pt-2">
+                <div>
+                  <AnimatedInput
+                    type="text"
+                    label="Full Name"
+                    value={donorName}
+                    onChange={(e) => {
+                      setDonorName(e.target.value)
+                      setErrors({ ...errors, donorName: "" })
+                    }}
+                  />
+                  {errors.donorName && (
+                    <p className="text-red-500 text-xs mt-1">{errors.donorName}</p>
+                  )}
+                </div>
+
+                <div>
+                  <AnimatedInput
+                    type="email"
+                    label="Email Address"
+                    value={donorEmail}
+                    onChange={(e) => {
+                      setDonorEmail(e.target.value)
+                      setErrors({ ...errors, donorEmail: "" })
+                    }}
+                  />
+                  {errors.donorEmail && (
+                    <p className="text-red-500 text-xs mt-1">{errors.donorEmail}</p>
+                  )}
+                </div>
+
+                <div>
+                  <AnimatedInput
+                    type="tel"
+                    label="Phone Number"
+                    value={donorPhone}
+                    onChange={(e) => {
+                      setDonorPhone(e.target.value)
+                      setErrors({ ...errors, donorPhone: "" })
+                    }}
+                  />
+                  {errors.donorPhone && (
+                    <p className="text-red-500 text-xs mt-1">{errors.donorPhone}</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Submit Button */}
+              <Button
+                type="submit"
+                className="w-full py-6 text-base font-semibold bg-gradient-to-r from-primary to-orange-500 hover:from-primary/90 hover:to-orange-500/90 rounded-xl shadow-lg shadow-primary/20 transition-all hover:shadow-xl hover:shadow-primary/25 hover:-translate-y-0.5"
+              >
+                Proceed to Payment
+              </Button>
+
+              {/* Footer note */}
+              <p className="text-center text-xs text-gray-500 pt-2">
+                Eligible for tax deduction under Section 80G
+              </p>
             </form>
-          </CardContent>
-          <CardFooter className="text-center text-sm text-gray-500">
-            Your donation is eligible for tax deduction under Section 80G of the Income Tax Act.
-          </CardFooter>
-        </Card>
-      </motion.div>
+          </div>
+        </motion.div>
+      </div>
     </div>
   )
 }
-
