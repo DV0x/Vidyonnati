@@ -627,19 +627,62 @@ ALTER TABLE help_interests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE admin_activity_log ENABLE ROW LEVEL SECURITY;
 ```
 
-### Step 2.2: Helper Function for Admin Check
+### Step 2.2: Create `admins` Table and Helper Functions
+
+The admin system uses a dedicated `admins` table rather than user metadata. This provides:
+- Proper RLS support (avoids recursive policy issues)
+- Role-based access (admin vs super_admin)
+- Audit trail of who added admins
 
 ```sql
+-- Create admins table
+CREATE TABLE admins (
+  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  email TEXT NOT NULL,
+  name TEXT,
+  role TEXT DEFAULT 'admin' CHECK (role IN ('admin', 'super_admin')),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  created_by UUID REFERENCES auth.users(id)
+);
+
+-- Enable RLS on admins table
+ALTER TABLE admins ENABLE ROW LEVEL SECURITY;
+
+-- Helper function: Check if current user is an admin
+-- Uses SECURITY DEFINER to bypass RLS when checking admin status
 CREATE OR REPLACE FUNCTION is_admin()
 RETURNS BOOLEAN AS $$
 BEGIN
-  RETURN (
-    SELECT raw_user_meta_data->>'role' = 'admin'
-    FROM auth.users
+  RETURN EXISTS (
+    SELECT 1 FROM public.admins
     WHERE id = auth.uid()
   );
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+-- Helper function: Check if current user is a super admin
+CREATE OR REPLACE FUNCTION is_super_admin()
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM public.admins
+    WHERE id = auth.uid() AND role = 'super_admin'
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+-- RLS Policies for admins table (use functions to avoid recursion)
+CREATE POLICY "Admins can view admin list"
+  ON admins FOR SELECT
+  USING (is_admin());
+
+CREATE POLICY "Super admins can insert admins"
+  ON admins FOR INSERT
+  WITH CHECK (is_super_admin());
+
+CREATE POLICY "Super admins can delete admins"
+  ON admins FOR DELETE
+  USING (is_super_admin());
 ```
 
 ### Step 2.3: Students Table Policies
@@ -871,21 +914,43 @@ USING (
 
 ### Step 4.2: Create Admin User
 
+Admins are managed via the `admins` table. To add an admin:
+
+1. **User registers normally** via `/register` or Google OAuth
+2. **Add to admins table** via SQL:
+
 ```sql
--- After creating an admin user via signup, update their role
-UPDATE auth.users
-SET raw_user_meta_data = jsonb_set(
-  COALESCE(raw_user_meta_data, '{}'::jsonb),
-  '{role}',
-  '"admin"'
-)
+-- Add an admin (user must already exist in auth.users)
+INSERT INTO admins (id, email, name, role)
+SELECT id, email, raw_user_meta_data->>'full_name', 'super_admin'
+FROM auth.users
 WHERE email = 'admin@vidyonnati.org';
 
--- Delete the auto-created student record for admin
+-- Delete the auto-created student record for admin (optional)
 DELETE FROM students WHERE id = (
   SELECT id FROM auth.users WHERE email = 'admin@vidyonnati.org'
 );
 ```
+
+**To add multiple admins by domain:**
+```sql
+-- Add all @vidyonnati.org users as admins
+INSERT INTO admins (id, email, name, role)
+SELECT id, email, raw_user_meta_data->>'full_name', 'admin'
+FROM auth.users
+WHERE email LIKE '%@vidyonnati.org'
+ON CONFLICT (id) DO NOTHING;
+```
+
+**To remove an admin:**
+```sql
+DELETE FROM admins WHERE email = 'former-admin@example.com';
+```
+
+**Note:** The `is_admin()` function checks the `admins` table, not user metadata. This approach:
+- Avoids recursive RLS policy issues
+- Allows role-based permissions (admin vs super_admin)
+- Provides audit trail via `created_by` field
 
 ---
 

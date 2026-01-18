@@ -140,6 +140,9 @@ function RegisterContent() {
       provider: "google",
       options: {
         redirectTo: `${window.location.origin}/callback?next=${redirectTo}`,
+        queryParams: {
+          prompt: 'select_account', // Force account selection on every login
+        },
       },
     })
 

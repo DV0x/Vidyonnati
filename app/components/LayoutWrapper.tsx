@@ -12,11 +12,12 @@ interface LayoutWrapperProps {
 export default function LayoutWrapper({ children }: LayoutWrapperProps) {
   const pathname = usePathname()
 
-  // Hide main site navigation on dashboard routes
+  // Hide main site navigation on dashboard and admin routes
   const isDashboard = pathname?.startsWith('/dashboard')
+  const isAdmin = pathname?.startsWith('/admin')
 
-  if (isDashboard) {
-    // Dashboard has its own layout, just render children
+  if (isDashboard || isAdmin) {
+    // Dashboard and Admin have their own layouts, just render children
     return <>{children}</>
   }
 

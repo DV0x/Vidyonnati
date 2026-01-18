@@ -280,9 +280,31 @@ CREATE TABLE admins (
 -- RLS: Only admins can view admin list
 ALTER TABLE admins ENABLE ROW LEVEL SECURITY;
 
+-- IMPORTANT: Use is_admin() function to avoid recursive RLS policy
 CREATE POLICY "Admins can view admin list"
   ON admins FOR SELECT
-  USING (EXISTS (SELECT 1 FROM admins WHERE id = auth.uid()));
+  USING (is_admin());
+
+CREATE POLICY "Super admins can insert admins"
+  ON admins FOR INSERT
+  WITH CHECK (is_super_admin());
+
+CREATE POLICY "Super admins can delete admins"
+  ON admins FOR DELETE
+  USING (is_super_admin());
+```
+
+### Helper Function: `is_super_admin()`
+```sql
+CREATE OR REPLACE FUNCTION is_super_admin()
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM public.admins
+    WHERE id = auth.uid() AND role = 'super_admin'
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 ```
 
 ### Update `is_admin()` Function
@@ -464,18 +486,53 @@ ALTER TABLE applications ADD COLUMN spotlight_annual_need INTEGER;
 12. ✅ Create storage bucket for spotlight photos
 13. ✅ Update TypeScript types (`types/database.ts`)
 
-### Phase B: Admin Dashboard - Core 🔄 IN PROGRESS
-1. Admin layout with auth check + navigation
-2. Dashboard overview page with stats
-3. Scholarship applications list + review page
-4. Status update API with activity logging
+### Phase B: Admin Dashboard - Core ✅ COMPLETE & TESTED (2026-01-18)
+1. ✅ Admin layout with auth check + navigation (`/app/admin/layout.tsx`)
+2. ✅ Dashboard overview page with stats (`/app/admin/page.tsx`)
+3. ✅ Scholarship applications list + review page
+   - `/app/admin/scholarship-applications/page.tsx` (search, filter, pagination)
+   - `/app/admin/scholarship-applications/[id]/page.tsx` (review + status change)
+4. ✅ API routes with activity logging
+   - `/app/api/admin/stats/route.ts` - Dashboard statistics
+   - `/app/api/admin/scholarship-applications/route.ts` - List with search/filter
+   - `/app/api/admin/scholarship-applications/[id]/route.ts` - GET/PATCH with activity log
+5. ✅ Bug fixes: Sign out blank page, Google auto-login issue
 
-### Phase C: Admin Dashboard - Complete
-1. Spotlight applications list + review page
-2. Spotlight management page (toggle featured)
-3. Donations management page
-4. Help interests management page
-5. Activity log viewer
+**Bugs Found & Fixed During Testing (2026-01-18):**
+| Bug | File | Fix |
+|-----|------|-----|
+| Public header/footer showing on admin pages | `app/components/LayoutWrapper.tsx` | Added `isAdmin` check to exclude `/admin` routes |
+| 500 error on admins table (recursive RLS) | Database RLS policy | Changed policy to use `is_admin()` function instead of direct query |
+| 406 error on students table for admin users | `app/context/AuthContext.tsx` | Added `isAdmin` state, skip student fetch for admins |
+
+**All Tests Passed:**
+- ✅ Admin login and dashboard access
+- ✅ Dashboard stats load correctly
+- ✅ Scholarship applications list with search/filter/pagination
+- ✅ Application detail view with all sections
+- ✅ Status change and save with activity logging
+- ✅ No network errors (all API calls return 200)
+
+### Phase C: Admin Dashboard - Complete ✅ COMPLETE (2026-01-18)
+1. ✅ Spotlight applications list + review page
+   - `/app/admin/spotlight-applications/page.tsx` (search, filter by status/featured, pagination)
+   - `/app/admin/spotlight-applications/[id]/page.tsx` (review + status change + featured toggle)
+   - `/app/api/admin/spotlight-applications/route.ts` - List with search/filter
+   - `/app/api/admin/spotlight-applications/[id]/route.ts` - GET/PATCH with activity log
+2. ✅ Spotlight management page (toggle featured, reorder)
+   - `/app/admin/spotlight/page.tsx` (manage all featured students from both sources)
+   - `/app/api/admin/spotlight/route.ts` - GET featured students, PATCH for reorder/toggle
+3. ✅ Donations management page
+   - `/app/admin/donations/page.tsx` (search, filter by status, edit dialog)
+   - `/app/api/admin/donations/route.ts` - List with search/filter
+   - `/app/api/admin/donations/[id]/route.ts` - GET/PATCH with activity log
+4. ✅ Help interests management page
+   - `/app/admin/help-interests/page.tsx` (search, filter by status/type, edit dialog)
+   - `/app/api/admin/help-interests/route.ts` - List with search/filter
+   - `/app/api/admin/help-interests/[id]/route.ts` - GET/PATCH with activity log
+5. ✅ Activity log viewer
+   - `/app/admin/activity-log/page.tsx` (filter by action type, entity type, admin)
+   - `/app/api/admin/activity-log/route.ts` - List with filters, admin enrichment
 
 ### Phase D: Spotlight Application Form
 1. Spotlight info/landing page (`/spotlight`)
@@ -502,26 +559,54 @@ ALTER TABLE applications ADD COLUMN spotlight_annual_need INTEGER;
 
 ## Testing Checklist
 
-**Admin Authentication:**
-- [ ] `admins` table created with RLS policies
-- [ ] `is_admin()` function returns true for admins
-- [ ] `is_admin()` function returns false for regular users
-- [ ] Admin can log in via normal `/login` page
-- [ ] Admin is redirected to `/admin` after login (optional)
-- [ ] Non-admin users redirected away from `/admin/*`
+**Phase A - Admin Authentication ✅ Complete:**
+- [x] `admins` table created with RLS policies
+- [x] `is_admin()` function returns true for admins
+- [x] `is_admin()` function returns false for regular users
+- [x] Admin can log in via normal `/login` page
+- [x] Non-admin users redirected away from `/admin/*`
 
-**Admin Dashboard:**
-- [ ] Admin can log in and see dashboard
-- [ ] Non-admin users redirected away
-- [ ] Can view all scholarship applications
-- [ ] Can change application status
-- [ ] Can add reviewer notes
-- [ ] Can enable/disable spotlight for approved students
-- [ ] Can view all spotlight applications
-- [ ] Can approve spotlight applications
-- [ ] Can manage donations
-- [ ] Can manage help interests
-- [ ] Activity log shows all admin actions
+**Phase B - Admin Dashboard Core ✅ Complete & Tested (2026-01-18):**
+- [x] Admin can log in and see dashboard at `/admin`
+- [x] Dashboard shows correct stats (pending apps, help interests, donations, featured)
+- [x] Recent activity log displays correctly
+- [x] Non-admin users redirected to home page
+- [x] Can view all scholarship applications at `/admin/scholarship-applications`
+- [x] Search works (by name, email, application ID)
+- [x] Status filter works (Pending, Under Review, Approved, Rejected, Needs Info)
+- [x] Type filter works (1st Year, 2nd Year)
+- [x] Pagination works correctly
+- [x] Can click application to view details
+- [x] Can change application status via dropdown
+- [x] Can add/edit reviewer notes
+- [x] Save button updates application and shows toast
+- [x] Activity log entry created on status change
+- [x] No network errors (500/406 fixed)
+
+**Phase C - Admin Dashboard Complete (Pending Testing):**
+- [ ] Spotlight Applications page loads at `/admin/spotlight-applications`
+- [ ] Can search spotlight applications by name, email, spotlight ID
+- [ ] Can filter by status (Pending, Under Review, Approved, Rejected)
+- [ ] Can filter by featured status
+- [ ] Can view spotlight application details at `/admin/spotlight-applications/[id]`
+- [ ] Can change spotlight application status
+- [ ] Can toggle "Featured on Homepage" switch
+- [ ] Spotlight Management page loads at `/admin/spotlight`
+- [ ] Shows all featured students from both scholarship + spotlight sources
+- [ ] Can reorder featured students with up/down arrows
+- [ ] Can toggle featured status on/off
+- [ ] Donations page loads at `/admin/donations`
+- [ ] Can search donations by name, email, donation ID
+- [ ] Can filter by status
+- [ ] Can edit donation (status, transaction reference, notes) via dialog
+- [ ] Help Interests page loads at `/admin/help-interests`
+- [ ] Can search by name, email, student name
+- [ ] Can filter by status and help type
+- [ ] Can edit help interest (status, notes) via dialog
+- [ ] Activity Log page loads at `/admin/activity-log`
+- [ ] Can filter by action type, entity type, admin
+- [ ] Shows all admin actions with before/after values
+- [ ] All pages have working pagination
 
 **Spotlight Application:**
 - [ ] Student can register/login

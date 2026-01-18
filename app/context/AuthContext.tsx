@@ -9,6 +9,7 @@ interface AuthContextType {
   user: User | null
   session: Session | null
   student: Student | null
+  isAdmin: boolean
   isLoading: boolean
   signOut: () => Promise<void>
   refreshStudent: () => Promise<void>
@@ -20,11 +21,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [session, setSession] = useState<Session | null>(null)
   const [student, setStudent] = useState<Student | null>(null)
+  const [isAdmin, setIsAdmin] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
 
   const supabase = createClient()
 
-  // Fetch student profile
+  // Check if user is admin
+  const checkIsAdmin = async (): Promise<boolean> => {
+    const { data } = await supabase.rpc('is_admin')
+    return !!data
+  }
+
+  // Fetch student profile (only for non-admin users)
   const fetchStudent = async (userId: string) => {
     const { data, error } = await supabase
       .from('students')
@@ -37,17 +45,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  // Fetch user data based on role
+  const fetchUserData = async (userId: string) => {
+    const adminStatus = await checkIsAdmin()
+    setIsAdmin(adminStatus)
+
+    // Only fetch student profile if user is not an admin
+    if (!adminStatus) {
+      await fetchStudent(userId)
+    }
+  }
+
   const refreshStudent = async () => {
-    if (user) {
+    if (user && !isAdmin) {
       await fetchStudent(user.id)
     }
   }
 
   const signOut = async () => {
-    await supabase.auth.signOut()
+    // Use global scope to sign out from all sessions and clear OAuth provider sessions
+    await supabase.auth.signOut({ scope: 'global' })
     setUser(null)
     setSession(null)
     setStudent(null)
+    setIsAdmin(false)
   }
 
   useEffect(() => {
@@ -58,7 +79,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(session?.user ?? null)
 
       if (session?.user) {
-        await fetchStudent(session.user.id)
+        await fetchUserData(session.user.id)
       }
 
       setIsLoading(false)
@@ -69,13 +90,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        // Set loading true while we fetch user data for new sessions
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+          setIsLoading(true)
+        }
+
         setSession(session)
         setUser(session?.user ?? null)
 
         if (session?.user) {
-          await fetchStudent(session.user.id)
+          await fetchUserData(session.user.id)
         } else {
           setStudent(null)
+          setIsAdmin(false)
         }
 
         setIsLoading(false)
@@ -93,6 +120,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         session,
         student,
+        isAdmin,
         isLoading,
         signOut,
         refreshStudent,

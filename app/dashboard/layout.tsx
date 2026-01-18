@@ -46,12 +46,9 @@ export default function DashboardLayout({
     router.push('/')
   }
 
-  if (isLoading) {
+  if (isLoading || !user) {
+    // Show skeleton while loading or redirecting to login
     return <DashboardSkeleton />
-  }
-
-  if (!user) {
-    return null
   }
 
   const displayName = student?.full_name || user.email?.split('@')[0] || 'Student'
