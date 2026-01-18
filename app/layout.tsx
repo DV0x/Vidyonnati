@@ -1,9 +1,7 @@
 import "./globals.css"
 import "./styles/grid-pattern.css"
 import { Overpass } from "next/font/google"
-import TopNavigation from "./components/TopNavigation"
-import MainNavigation from "./components/MainNavigation"
-import Footer from "./components/Footer"
+import LayoutWrapper from "./components/LayoutWrapper"
 import { DonorProvider } from "./context/DonorContext"
 import { AuthProvider } from "./context/AuthContext"
 import { Toaster } from "@/components/ui/toaster"
@@ -27,12 +25,7 @@ export default function RootLayout({
       <body className={overpass.className}>
         <AuthProvider>
           <DonorProvider>
-            {/* Top bar - scrolls away */}
-            <TopNavigation />
-            {/* Main nav - sticky */}
-            <MainNavigation />
-            <main>{children}</main>
-            <Footer />
+            <LayoutWrapper>{children}</LayoutWrapper>
           </DonorProvider>
         </AuthProvider>
         <Toaster />

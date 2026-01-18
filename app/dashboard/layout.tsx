@@ -73,12 +73,14 @@ export default function DashboardLayout({
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
-        {/* Logo */}
+        {/* Logo - links to home */}
         <div className="flex h-16 items-center gap-2 border-b border-gray-200 px-6">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-orange-500">
-            <GraduationCap className="h-5 w-5 text-white" />
-          </div>
-          <span className="text-lg font-semibold text-gray-900">Vidyonnati</span>
+          <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-orange-500">
+              <GraduationCap className="h-5 w-5 text-white" />
+            </div>
+            <span className="text-lg font-semibold text-gray-900">Vidyonnati</span>
+          </Link>
           <button
             className="ml-auto lg:hidden"
             onClick={() => setSidebarOpen(false)}
@@ -155,10 +157,12 @@ export default function DashboardLayout({
           >
             <Menu className="h-6 w-6" />
           </button>
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-orange-500">
-            <GraduationCap className="h-5 w-5 text-white" />
-          </div>
-          <span className="text-lg font-semibold text-gray-900">Vidyonnati</span>
+          <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-orange-500">
+              <GraduationCap className="h-5 w-5 text-white" />
+            </div>
+            <span className="text-lg font-semibold text-gray-900">Vidyonnati</span>
+          </Link>
         </header>
 
         {/* Page content */}
