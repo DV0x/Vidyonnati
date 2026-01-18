@@ -25,8 +25,8 @@
 - [x] Dependencies installed (Phase 5 complete) - @supabase/supabase-js, @supabase/ssr, resend
 - [x] Supabase client libraries created (Phase 6 complete) - client.ts, server.ts, admin.ts, database.ts
 - [x] Auth pages created (Phase 7 complete) - login, register, callback, proxy, AuthContext
-- [ ] Student dashboard not created (Phase 8 next)
-- [ ] API routes not created
+- [x] Student dashboard created (Phase 8 complete) - layout, home, applications list, detail, profile
+- [ ] API routes not created (Phase 9 next)
 
 **Key Design Decisions:**
 - Students create accounts (email/password or Google) to apply
@@ -1399,11 +1399,12 @@ export async function sendAdminNotification(data: {
 - [x] 7.6 Update MainNavigation with login/user menu
 - [x] 7.7 Add AuthProvider to root layout
 
-### Phase 8: Student Dashboard
-- [ ] 8.1 Create dashboard layout
-- [ ] 8.2 Create dashboard home (applications list)
-- [ ] 8.3 Create application detail page
-- [ ] 8.4 Create profile page
+### Phase 8: Student Dashboard ✅
+- [x] 8.1 Create dashboard layout (/app/dashboard/layout.tsx)
+- [x] 8.2 Create dashboard home (/app/dashboard/page.tsx)
+- [x] 8.3 Create applications list (/app/dashboard/applications/page.tsx)
+- [x] 8.4 Create application detail page (/app/dashboard/applications/[id]/page.tsx)
+- [x] 8.5 Create profile page (/app/dashboard/profile/page.tsx)
 
 ### Phase 9: API Routes
 - [ ] 9.1 Create student profile API
