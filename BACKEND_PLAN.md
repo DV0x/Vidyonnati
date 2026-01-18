@@ -24,7 +24,7 @@
 - [x] Authentication configured (Phase 4 complete) - Google OAuth + Admin user
 - [x] Dependencies installed (Phase 5 complete) - @supabase/supabase-js, @supabase/ssr, resend
 - [x] Supabase client libraries created (Phase 6 complete) - client.ts, server.ts, admin.ts, database.ts
-- [x] Auth pages created (Phase 7 complete) - login, register, callback, middleware, AuthContext
+- [x] Auth pages created (Phase 7 complete) - login, register, callback, proxy, AuthContext
 - [ ] Student dashboard not created (Phase 8 next)
 - [ ] API routes not created
 
@@ -1395,7 +1395,7 @@ export async function sendAdminNotification(data: {
 - [x] 7.2 Create login page (/app/(auth)/login/page.tsx)
 - [x] 7.3 Create register page (/app/(auth)/register/page.tsx)
 - [x] 7.4 Create OAuth callback route (/app/(auth)/callback/route.ts)
-- [x] 7.5 Create middleware (/middleware.ts)
+- [x] 7.5 Create proxy for route protection (/proxy.ts)
 - [x] 7.6 Update MainNavigation with login/user menu
 - [x] 7.7 Add AuthProvider to root layout
 
