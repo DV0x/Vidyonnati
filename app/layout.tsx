@@ -5,6 +5,8 @@ import TopNavigation from "./components/TopNavigation"
 import MainNavigation from "./components/MainNavigation"
 import Footer from "./components/Footer"
 import { DonorProvider } from "./context/DonorContext"
+import { AuthProvider } from "./context/AuthContext"
+import { Toaster } from "@/components/ui/toaster"
 import type React from "react"
 
 const overpass = Overpass({ subsets: ["latin"] })
@@ -23,14 +25,17 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={overpass.className}>
-        <DonorProvider>
-          {/* Top bar - scrolls away */}
-          <TopNavigation />
-          {/* Main nav - sticky */}
-          <MainNavigation />
-          <main>{children}</main>
-          <Footer />
-        </DonorProvider>
+        <AuthProvider>
+          <DonorProvider>
+            {/* Top bar - scrolls away */}
+            <TopNavigation />
+            {/* Main nav - sticky */}
+            <MainNavigation />
+            <main>{children}</main>
+            <Footer />
+          </DonorProvider>
+        </AuthProvider>
+        <Toaster />
       </body>
     </html>
   )

@@ -2,14 +2,30 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
-import { Menu, X, Heart, GraduationCap } from "lucide-react"
+import { usePathname, useRouter } from "next/navigation"
+import { Menu, X, Heart, GraduationCap, User, LogOut, LayoutDashboard, LogIn } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { useAuth } from "@/app/context/AuthContext"
 
 export default function MainNavigation() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isScrolled, setIsScrolled] = useState(false)
   const pathname = usePathname()
+  const router = useRouter()
+  const { user, student, isLoading, signOut } = useAuth()
+
+  const handleSignOut = async () => {
+    await signOut()
+    router.push("/")
+    router.refresh()
+  }
 
   // Handle scroll detection for sticky nav
   useEffect(() => {
@@ -108,7 +124,7 @@ export default function MainNavigation() {
             Our Scholars
           </Link>
 
-          {/* Dual CTAs */}
+          {/* CTAs and Auth */}
           <div className="flex items-center gap-3 ml-4">
             <Link href="/apply">
               <Button
@@ -125,6 +141,49 @@ export default function MainNavigation() {
                 Donate
               </Button>
             </Link>
+
+            {/* Auth Section */}
+            {!isLoading && (
+              <>
+                {user ? (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" className="flex items-center gap-2 ml-2">
+                        <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
+                          <User className="w-4 h-4 text-primary" />
+                        </div>
+                        <span className="hidden xl:inline text-sm font-medium">
+                          {student?.full_name || user.email?.split("@")[0]}
+                        </span>
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48">
+                      <DropdownMenuItem asChild>
+                        <Link href="/dashboard" className="flex items-center gap-2 cursor-pointer">
+                          <LayoutDashboard className="w-4 h-4" />
+                          Dashboard
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={handleSignOut}
+                        className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600"
+                      >
+                        <LogOut className="w-4 h-4" />
+                        Sign Out
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : (
+                  <Link href="/login">
+                    <Button variant="ghost" className="flex items-center gap-2 ml-2">
+                      <LogIn className="w-4 h-4" />
+                      Login
+                    </Button>
+                  </Link>
+                )}
+              </>
+            )}
           </div>
         </div>
 
@@ -179,6 +238,65 @@ export default function MainNavigation() {
                     </Button>
                   </Link>
                 </div>
+
+                {/* Mobile Auth Section */}
+                {!isLoading && (
+                  <div className="pt-6 space-y-3 border-t mt-4">
+                    {user ? (
+                      <>
+                        <div className="flex items-center gap-3 px-4 py-2 bg-gray-50 rounded-lg">
+                          <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
+                            <User className="w-5 h-5 text-primary" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-gray-900">
+                              {student?.full_name || "Student"}
+                            </p>
+                            <p className="text-sm text-gray-500">{user.email}</p>
+                          </div>
+                        </div>
+                        <Link href="/dashboard" className="block" onClick={() => setIsMenuOpen(false)}>
+                          <Button
+                            variant="outline"
+                            className="w-full flex items-center justify-center gap-2 py-5"
+                          >
+                            <LayoutDashboard className="w-5 h-5" />
+                            Dashboard
+                          </Button>
+                        </Link>
+                        <Button
+                          variant="ghost"
+                          onClick={() => {
+                            handleSignOut()
+                            setIsMenuOpen(false)
+                          }}
+                          className="w-full flex items-center justify-center gap-2 py-5 text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <LogOut className="w-5 h-5" />
+                          Sign Out
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <Link href="/login" className="block" onClick={() => setIsMenuOpen(false)}>
+                          <Button
+                            variant="outline"
+                            className="w-full flex items-center justify-center gap-2 py-5"
+                          >
+                            <LogIn className="w-5 h-5" />
+                            Login
+                          </Button>
+                        </Link>
+                        <Link href="/register" className="block" onClick={() => setIsMenuOpen(false)}>
+                          <Button className="w-full flex items-center justify-center gap-2 py-5 bg-primary">
+                            <User className="w-5 h-5" />
+                            Create Account
+                          </Button>
+                        </Link>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Mobile footer info */}
