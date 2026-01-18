@@ -35,8 +35,11 @@ export default function DashboardLayout({
   const pathname = usePathname()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
+  // Handle redirects
   useEffect(() => {
-    if (!isLoading && !user) {
+    if (isLoading) return // Wait for auth to load
+
+    if (!user) {
       router.push('/login?redirect=/dashboard')
     }
   }, [user, isLoading, router])
@@ -46,8 +49,14 @@ export default function DashboardLayout({
     router.push('/')
   }
 
-  if (isLoading || !user) {
-    // Show skeleton while loading or redirecting to login
+  // Only show skeleton on initial load, not during auth state changes
+  // This prevents the page from going blank when auth refreshes
+  if (!user && isLoading) {
+    return <DashboardSkeleton />
+  }
+
+  // Redirect if definitely not authorized (after loading completes)
+  if (!isLoading && !user) {
     return <DashboardSkeleton />
   }
 

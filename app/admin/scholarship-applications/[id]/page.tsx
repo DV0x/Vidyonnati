@@ -1,11 +1,11 @@
 "use client"
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { motion } from 'motion/react'
 import { toast } from 'sonner'
-import { createClient } from '@/lib/supabase/client'
 import type { Application, ApplicationDocument, ApplicationStatus } from '@/types/database'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -42,8 +42,12 @@ import {
   Loader2,
 } from 'lucide-react'
 
+interface ApplicationDocumentWithUrl extends ApplicationDocument {
+  signedUrl?: string | null
+}
+
 interface ApplicationWithDocuments extends Application {
-  documents: ApplicationDocument[]
+  documents: ApplicationDocumentWithUrl[]
 }
 
 const statusConfig: Record<string, { label: string; icon: React.ElementType; className: string; bgColor: string }> = {
@@ -80,6 +84,7 @@ const statusConfig: Record<string, { label: string; icon: React.ElementType; cla
 }
 
 const documentTypeLabels: Record<string, string> = {
+  student_photo: 'Student Photo',
   ssc_marksheet: 'SSC Marksheet',
   aadhar_student: 'Student Aadhar Card',
   aadhar_parent: 'Parent Aadhar Card',
@@ -299,13 +304,48 @@ export default function ApplicationReviewPage() {
         </Card>
       </motion.div>
 
+      {/* Student Photo (if available) */}
+      {(() => {
+        const studentPhotoDoc = application.documents.find(d => d.document_type === 'student_photo')
+        if (studentPhotoDoc?.signedUrl) {
+          return (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.2 }}
+              className="flex justify-center"
+            >
+              <Card className="w-full max-w-xs">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <User className="h-5 w-5 text-primary" />
+                    Student Photo
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="relative aspect-[3/4] w-full max-w-[180px] mx-auto overflow-hidden rounded-lg border">
+                    <Image
+                      src={studentPhotoDoc.signedUrl}
+                      alt={application.full_name}
+                      fill
+                      className="object-cover"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )
+        }
+        return null
+      })()}
+
       {/* Application Details */}
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Personal Information */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.2 }}
+          transition={{ duration: 0.3, delay: 0.25 }}
         >
           <Card>
             <CardHeader>
@@ -580,19 +620,7 @@ function InfoRow({
   )
 }
 
-function DocumentRow({ document }: { document: ApplicationDocument }) {
-  const supabase = createClient()
-
-  const handleDownload = async () => {
-    const { data } = await supabase.storage
-      .from('application-documents')
-      .createSignedUrl(document.storage_path, 60)
-
-    if (data?.signedUrl) {
-      window.open(data.signedUrl, '_blank')
-    }
-  }
-
+function DocumentRow({ document }: { document: ApplicationDocumentWithUrl }) {
   return (
     <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
       <div className="flex items-center gap-3 min-w-0">
@@ -604,9 +632,16 @@ function DocumentRow({ document }: { document: ApplicationDocument }) {
           <p className="text-xs text-gray-500 truncate">{document.file_name}</p>
         </div>
       </div>
-      <Button variant="ghost" size="sm" onClick={handleDownload}>
-        <Download className="h-4 w-4" />
-      </Button>
+      {document.signedUrl && (
+        <a
+          href={document.signedUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center justify-center rounded-md text-sm font-medium h-9 w-9 hover:bg-gray-200 transition-colors"
+        >
+          <Download className="h-4 w-4" />
+        </a>
+      )}
     </div>
   )
 }

@@ -31,6 +31,10 @@ import {
   BookOpen,
 } from 'lucide-react'
 
+interface ApplicationDocumentWithUrl extends ApplicationDocument {
+  signedUrl?: string | null
+}
+
 const statusConfig: Record<string, { label: string; icon: React.ElementType; className: string; bgColor: string }> = {
   pending: {
     label: 'Pending Review',
@@ -78,7 +82,7 @@ export default function ApplicationDetailPage() {
   const params = useParams()
   const { user } = useAuth()
   const [application, setApplication] = useState<Application | null>(null)
-  const [documents, setDocuments] = useState<ApplicationDocument[]>([])
+  const [documents, setDocuments] = useState<ApplicationDocumentWithUrl[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -112,8 +116,20 @@ export default function ApplicationDetailPage() {
         .select('*')
         .eq('application_id', applicationId)
 
-      if (docsData) {
-        setDocuments(docsData)
+      if (docsData && docsData.length > 0) {
+        // Generate signed URLs for all documents
+        const docsWithUrls = await Promise.all(
+          docsData.map(async (doc) => {
+            const { data: signedUrlData } = await supabase.storage
+              .from('application-documents')
+              .createSignedUrl(doc.storage_path, 3600) // 1 hour expiry
+            return {
+              ...doc,
+              signedUrl: signedUrlData?.signedUrl || null,
+            }
+          })
+        )
+        setDocuments(docsWithUrls)
       }
 
       setIsLoading(false)
@@ -543,19 +559,7 @@ function StatusTimeline({ status }: { status: string }) {
   )
 }
 
-function DocumentRow({ document }: { document: ApplicationDocument }) {
-  const supabase = createClient()
-
-  const handleDownload = async () => {
-    const { data } = await supabase.storage
-      .from('application-documents')
-      .createSignedUrl(document.storage_path, 60)
-
-    if (data?.signedUrl) {
-      window.open(data.signedUrl, '_blank')
-    }
-  }
-
+function DocumentRow({ document }: { document: ApplicationDocumentWithUrl }) {
   return (
     <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
       <div className="flex items-center gap-3 min-w-0">
@@ -567,9 +571,16 @@ function DocumentRow({ document }: { document: ApplicationDocument }) {
           <p className="text-xs text-gray-500 truncate">{document.file_name}</p>
         </div>
       </div>
-      <Button variant="ghost" size="sm" onClick={handleDownload}>
-        <Download className="h-4 w-4" />
-      </Button>
+      {document.signedUrl && (
+        <a
+          href={document.signedUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center justify-center rounded-md text-sm font-medium h-9 w-9 hover:bg-gray-200 transition-colors"
+        >
+          <Download className="h-4 w-4" />
+        </a>
+      )}
     </div>
   )
 }

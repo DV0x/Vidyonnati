@@ -90,8 +90,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        // Set loading true while we fetch user data for new sessions
-        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        // Only set loading for actual sign-in events, not token refresh
+        // Token refresh happens silently in the background and shouldn't disrupt UI
+        if (event === 'SIGNED_IN') {
           setIsLoading(true)
         }
 
@@ -99,13 +100,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(session?.user ?? null)
 
         if (session?.user) {
-          await fetchUserData(session.user.id)
+          // Only fetch user data on sign-in, not on token refresh
+          // Token refresh doesn't change user data
+          if (event === 'SIGNED_IN') {
+            await fetchUserData(session.user.id)
+          }
         } else {
           setStudent(null)
           setIsAdmin(false)
         }
 
-        setIsLoading(false)
+        if (event === 'SIGNED_IN') {
+          setIsLoading(false)
+        }
       }
     )
 

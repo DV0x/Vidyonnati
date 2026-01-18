@@ -82,8 +82,14 @@ export default function AdminLayout({
     router.push('/')
   }
 
-  if (authLoading || !user || !isAdmin) {
-    // Show skeleton while loading or redirecting
+  // Only show skeleton on initial load, not during auth state changes
+  // This prevents the page from going blank when auth refreshes
+  if (!user && authLoading) {
+    return <AdminSkeleton />
+  }
+
+  // Redirect if definitely not authorized (after loading completes)
+  if (!authLoading && (!user || !isAdmin)) {
     return <AdminSkeleton />
   }
 

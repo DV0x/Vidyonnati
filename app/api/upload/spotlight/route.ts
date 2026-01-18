@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
-import type { DocumentType } from '@/types/database'
+import type { SpotlightDocumentType } from '@/types/database'
 
 const ALLOWED_MIME_TYPES = [
   'image/jpeg',
@@ -11,15 +11,12 @@ const ALLOWED_MIME_TYPES = [
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 
-const VALID_DOCUMENT_TYPES: DocumentType[] = [
-  'student_photo',
-  'ssc_marksheet',
-  'aadhar_student',
-  'aadhar_parent',
-  'bonafide_certificate',
-  'bank_passbook',
-  'first_year_marksheet',
-  'mango_plant_photo',
+const VALID_DOCUMENT_TYPES: SpotlightDocumentType[] = [
+  'photo',
+  'marksheet',
+  'aadhar',
+  'income_certificate',
+  'other',
 ]
 
 export async function POST(request: Request) {
@@ -37,7 +34,7 @@ export async function POST(request: Request) {
   const formData = await request.formData()
   const file = formData.get('file') as File | null
   const applicationId = formData.get('applicationId') as string | null
-  const documentType = formData.get('documentType') as DocumentType | null
+  const documentType = formData.get('documentType') as SpotlightDocumentType | null
 
   if (!file || !applicationId || !documentType) {
     return NextResponse.json(
@@ -65,14 +62,14 @@ export async function POST(request: Request) {
   // Validate file size
   if (file.size > MAX_FILE_SIZE) {
     return NextResponse.json(
-      { error: 'File size exceeds 5MB limit' },
+      { error: 'File size exceeds 10MB limit' },
       { status: 400 }
     )
   }
 
   // Verify application belongs to user
   const { data: application, error: appError } = await supabase
-    .from('applications')
+    .from('spotlight_applications')
     .select('id')
     .eq('id', applicationId)
     .eq('student_id', user.id)
@@ -93,7 +90,7 @@ export async function POST(request: Request) {
   // Upload file to storage
   const arrayBuffer = await file.arrayBuffer()
   const { error: uploadError } = await supabase.storage
-    .from('application-documents')
+    .from('spotlight-documents')
     .upload(storagePath, arrayBuffer, {
       contentType: file.type,
       upsert: false,
@@ -109,21 +106,21 @@ export async function POST(request: Request) {
 
   // Check if document of this type already exists for this application
   const { data: existingDoc } = await supabase
-    .from('application_documents')
+    .from('spotlight_documents')
     .select('id, storage_path')
-    .eq('application_id', applicationId)
+    .eq('spotlight_application_id', applicationId)
     .eq('document_type', documentType)
     .single()
 
   if (existingDoc) {
     // Delete old file from storage
     await supabase.storage
-      .from('application-documents')
+      .from('spotlight-documents')
       .remove([existingDoc.storage_path])
 
     // Update existing record
     const { data: document, error: updateError } = await supabase
-      .from('application_documents')
+      .from('spotlight_documents')
       .update({
         storage_path: storagePath,
         file_name: file.name,
@@ -143,14 +140,28 @@ export async function POST(request: Request) {
       )
     }
 
+    // If this is a photo, update the photo_url on the application
+    if (documentType === 'photo') {
+      const { data: signedUrlData } = await supabase.storage
+        .from('spotlight-documents')
+        .createSignedUrl(storagePath, 60 * 60 * 24 * 365) // 1 year for display
+
+      if (signedUrlData?.signedUrl) {
+        await supabase
+          .from('spotlight_applications')
+          .update({ photo_url: signedUrlData.signedUrl })
+          .eq('id', applicationId)
+      }
+    }
+
     return NextResponse.json(document)
   }
 
   // Create document record
   const { data: document, error: docError } = await supabase
-    .from('application_documents')
+    .from('spotlight_documents')
     .insert({
-      application_id: applicationId,
+      spotlight_application_id: applicationId,
       document_type: documentType,
       storage_path: storagePath,
       file_name: file.name,
@@ -164,13 +175,27 @@ export async function POST(request: Request) {
     console.error('Document creation error:', docError)
     // Try to clean up uploaded file
     await supabase.storage
-      .from('application-documents')
+      .from('spotlight-documents')
       .remove([storagePath])
 
     return NextResponse.json(
       { error: 'Failed to create document record' },
       { status: 500 }
     )
+  }
+
+  // If this is a photo, update the photo_url on the application
+  if (documentType === 'photo') {
+    const { data: signedUrlData } = await supabase.storage
+      .from('spotlight-documents')
+      .createSignedUrl(storagePath, 60 * 60 * 24 * 365) // 1 year for display
+
+    if (signedUrlData?.signedUrl) {
+      await supabase
+        .from('spotlight_applications')
+        .update({ photo_url: signedUrlData.signedUrl })
+        .eq('id', applicationId)
+    }
   }
 
   return NextResponse.json(document, { status: 201 })
@@ -202,7 +227,7 @@ export async function GET(request: Request) {
 
   // Verify application belongs to user (or user is admin)
   const { data: application } = await supabase
-    .from('applications')
+    .from('spotlight_applications')
     .select('id')
     .eq('id', applicationId)
     .eq('student_id', user.id)
@@ -221,9 +246,9 @@ export async function GET(request: Request) {
 
   // Build query
   let query = supabase
-    .from('application_documents')
+    .from('spotlight_documents')
     .select('*')
-    .eq('application_id', applicationId)
+    .eq('spotlight_application_id', applicationId)
 
   if (documentType) {
     query = query.eq('document_type', documentType)
@@ -242,7 +267,7 @@ export async function GET(request: Request) {
   const documentsWithUrls = await Promise.all(
     documents.map(async (doc) => {
       const { data } = await supabase.storage
-        .from('application-documents')
+        .from('spotlight-documents')
         .createSignedUrl(doc.storage_path, 3600) // 1 hour expiry
 
       return {

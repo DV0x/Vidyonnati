@@ -41,9 +41,23 @@ export async function GET(
     .eq('spotlight_application_id', id)
     .order('uploaded_at', { ascending: true })
 
+  // Generate signed URLs for documents
+  const documentsWithUrls = await Promise.all(
+    (documents ?? []).map(async (doc) => {
+      const { data } = await supabase.storage
+        .from('spotlight-documents')
+        .createSignedUrl(doc.storage_path, 3600) // 1 hour expiry
+
+      return {
+        ...doc,
+        signedUrl: data?.signedUrl || null,
+      }
+    })
+  )
+
   return NextResponse.json({
     application,
-    documents: documents ?? [],
+    documents: documentsWithUrls,
   })
 }
 

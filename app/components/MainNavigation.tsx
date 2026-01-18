@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { Menu, X, Heart, GraduationCap, User, LogOut, LayoutDashboard, LogIn } from "lucide-react"
+import { Menu, X, Heart, GraduationCap, User, LogOut, LayoutDashboard, LogIn, Star } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -123,6 +123,13 @@ export default function MainNavigation() {
           >
             Our Scholars
           </Link>
+          <Link
+            href="/spotlight"
+            className={`nav-link font-medium flex items-center gap-1 ${isActive("/spotlight") ? "text-primary" : ""}`}
+          >
+            <Star className="w-4 h-4" />
+            Spotlight
+          </Link>
 
           {/* CTAs and Auth */}
           <div className="flex items-center gap-3 ml-4">
@@ -218,6 +225,16 @@ export default function MainNavigation() {
                   onClick={() => setIsMenuOpen(false)}
                 >
                   Our Scholars
+                </Link>
+                <Link
+                  href="/spotlight"
+                  className={`nav-link text-lg py-3 px-4 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 ${
+                    isActive("/spotlight") ? "text-primary bg-primary/5" : ""
+                  }`}
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  <Star className="w-5 h-5" />
+                  Spotlight
                 </Link>
 
                 {/* Mobile CTAs */}

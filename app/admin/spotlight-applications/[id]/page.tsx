@@ -48,7 +48,7 @@ import {
 
 interface SpotlightDetailResponse {
   application: SpotlightApplication
-  documents: SpotlightDocument[]
+  documents: (SpotlightDocument & { signedUrl?: string | null })[]
 }
 
 const statusConfig: Record<string, { label: string; className: string; icon: React.ElementType }> = {
@@ -103,7 +103,7 @@ export default function SpotlightApplicationDetailPage({
   const { id: applicationId } = use(params)
   const router = useRouter()
   const [application, setApplication] = useState<SpotlightApplication | null>(null)
-  const [documents, setDocuments] = useState<SpotlightDocument[]>([])
+  const [documents, setDocuments] = useState<(SpotlightDocument & { signedUrl?: string | null })[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
 
@@ -595,25 +595,7 @@ function InfoRow({
   )
 }
 
-function DocumentRow({ document }: { document: SpotlightDocument }) {
-  const [isDownloading, setIsDownloading] = useState(false)
-
-  const handleDownload = async () => {
-    setIsDownloading(true)
-    const supabase = createClient()
-
-    const { data, error } = await supabase.storage
-      .from('spotlight-documents')
-      .createSignedUrl(document.storage_path, 60)
-
-    if (error || !data?.signedUrl) {
-      toast.error('Failed to download document')
-    } else {
-      window.open(data.signedUrl, '_blank')
-    }
-    setIsDownloading(false)
-  }
-
+function DocumentRow({ document }: { document: SpotlightDocument & { signedUrl?: string | null } }) {
   return (
     <div className="flex items-center justify-between rounded-lg border p-3">
       <div className="flex items-center gap-3 min-w-0">
@@ -627,14 +609,16 @@ function DocumentRow({ document }: { document: SpotlightDocument }) {
           <p className="text-xs text-gray-500 truncate">{document.file_name}</p>
         </div>
       </div>
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={handleDownload}
-        disabled={isDownloading}
-      >
-        <Download className="h-4 w-4" />
-      </Button>
+      {document.signedUrl && (
+        <a
+          href={document.signedUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center justify-center rounded-md text-sm font-medium h-9 w-9 hover:bg-gray-100 transition-colors"
+        >
+          <Download className="h-4 w-4" />
+        </a>
+      )}
     </div>
   )
 }

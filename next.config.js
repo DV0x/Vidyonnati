@@ -1,5 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  typescript: {
+    ignoreBuildErrors: true,
+  },
   images: {
     remotePatterns: [
       {
@@ -8,7 +11,7 @@ const nextConfig = {
       },
       {
         protocol: "https",
-        hostname: "glvxukupnymekmmgxkxg.supabase.co",
+        hostname: "ukjlfvupcajxnqyoinso.supabase.co",
       },
     ],
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],

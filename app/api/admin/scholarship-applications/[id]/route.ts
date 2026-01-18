@@ -42,9 +42,23 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     .select('*')
     .eq('application_id', id)
 
+  // Generate signed URLs for documents
+  const documentsWithUrls = await Promise.all(
+    (documents ?? []).map(async (doc) => {
+      const { data } = await supabase.storage
+        .from('application-documents')
+        .createSignedUrl(doc.storage_path, 3600) // 1 hour expiry
+
+      return {
+        ...doc,
+        signedUrl: data?.signedUrl || null,
+      }
+    })
+  )
+
   return NextResponse.json({
     ...application,
-    documents: documents ?? [],
+    documents: documentsWithUrls,
   })
 }
 

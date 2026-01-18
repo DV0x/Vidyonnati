@@ -534,13 +534,26 @@ ALTER TABLE applications ADD COLUMN spotlight_annual_need INTEGER;
    - `/app/admin/activity-log/page.tsx` (filter by action type, entity type, admin)
    - `/app/api/admin/activity-log/route.ts` - List with filters, admin enrichment
 
-### Phase D: Spotlight Application Form
-1. Spotlight info/landing page (`/spotlight`)
-2. Multi-step spotlight application wizard
-3. Photo upload with preview
-4. Competitive exams dynamic form
-5. Circumstances checkboxes
-6. API routes for submission
+### Phase D: Spotlight Application Form ✅ COMPLETE (2026-01-18)
+1. ✅ Spotlight info/landing page (`/spotlight`)
+2. ✅ Multi-step spotlight application wizard (`/spotlight/apply`)
+3. ✅ Photo upload with preview
+4. ✅ Competitive exams dynamic form
+5. ✅ Circumstances checkboxes
+6. ✅ API routes for submission
+   - `/app/api/student/spotlight/route.ts` - GET/POST for student's spotlight applications
+   - `/app/api/upload/spotlight/route.ts` - File uploads for spotlight documents
+7. ✅ Student dashboard spotlight view (`/dashboard/spotlight/[id]`)
+
+**Bug Fix Applied (2026-01-18):**
+| Bug | File | Fix |
+|-----|------|-----|
+| Page goes blank when clicking download icons | `app/dashboard/layout.tsx` | Changed skeleton condition from OR to AND logic (matching admin layout fix) |
+| Download triggering auth refresh | `app/dashboard/applications/[id]/page.tsx` | Pre-fetch signed URLs, use `<a>` tags instead of Button onClick |
+| Download triggering auth refresh | `app/dashboard/spotlight/[id]/page.tsx` | Use plain `<a>` tags instead of Button asChild wrapper |
+
+**Root Cause Explanation:**
+The student dashboard layout used `if (isLoading || !user)` which showed skeleton during ANY auth state change. When users clicked download links for Supabase storage, the auth token refresh caused a momentary state change, triggering the skeleton and blanking the page. The fix uses `if (!user && isLoading)` - showing skeleton only on initial load when there's no user AND loading is in progress.
 
 ### Phase E: Homepage Integration
 1. Update StudentSpotlightSection to fetch real data

@@ -30,6 +30,7 @@ export const incomeBracketLabels: Record<typeof incomeBrackets[number], string> 
 
 // Base personal info (common to both application types)
 const basePersonalInfoSchema = z.object({
+  studentPhoto: z.any().refine((file) => file instanceof File, "Student photo is required"),
   fullName: z
     .string()
     .min(2, "Name must be at least 2 characters")
@@ -267,6 +268,7 @@ export const bankDetailsSchema = z.object({
 
 // First year documents
 export const firstYearDocumentsSchema = z.object({
+  studentPhoto: z.any().refine((file) => file instanceof File, "Student photo is required"),
   sscMarksheet: z.any().refine((file) => file instanceof File, "SSC marks sheet is required"),
   aadharStudent: z.any().refine((file) => file instanceof File, "Student Aadhar is required"),
   aadharParent: z.any().refine((file) => file instanceof File, "Parent/Guardian Aadhar is required"),
@@ -276,6 +278,7 @@ export const firstYearDocumentsSchema = z.object({
 
 // Second year documents
 export const secondYearDocumentsSchema = z.object({
+  studentPhoto: z.any().refine((file) => file instanceof File, "Student photo is required"),
   aadharStudent: z.any().refine((file) => file instanceof File, "Student Aadhar is required"),
   aadharParent: z.any().refine((file) => file instanceof File, "Parent/Guardian Aadhar is required"),
   bankPassbook: z.any().refine((file) => file instanceof File, "Bank passbook first page is required"),
@@ -403,7 +406,7 @@ export function getStepSchema(step: number, applicationType: ApplicationType) {
 // Step field names for validation
 // ============================================
 export const firstYearStepFields: Record<number, string[]> = {
-  0: ['fullName', 'email', 'phone', 'dateOfBirth', 'village', 'mandal', 'district', 'pincode', 'address'],
+  0: ['studentPhoto', 'fullName', 'email', 'phone', 'dateOfBirth', 'village', 'mandal', 'district', 'pincode', 'address'],
   1: ['motherName', 'fatherName', 'guardianName', 'guardianRelationship'],
   2: ['highSchoolStudied', 'sscTotalMarks', 'sscMaxMarks', 'sscPercentage', 'collegeAdmitted', 'collegeAddress', 'courseJoined', 'groupSubjects', 'dateOfAdmission'],
   3: ['bankAccountNumber', 'bankNameBranch', 'ifscCode'],
@@ -412,7 +415,7 @@ export const firstYearStepFields: Record<number, string[]> = {
 }
 
 export const secondYearStepFields: Record<number, string[]> = {
-  0: ['fullName', 'email', 'phone', 'dateOfBirth', 'gender', 'village', 'mandal', 'district', 'pincode', 'address'],
+  0: ['studentPhoto', 'fullName', 'email', 'phone', 'dateOfBirth', 'gender', 'village', 'mandal', 'district', 'pincode', 'address'],
   1: ['motherName', 'motherOccupation', 'motherMobile', 'fatherName', 'fatherOccupation', 'fatherMobile', 'guardianDetails', 'familyAdultsCount', 'familyChildrenCount', 'annualFamilyIncome'],
   2: ['highSchoolStudied', 'sscTotalMarks', 'sscMaxMarks', 'sscPercentage', 'currentCollege', 'collegeAddress', 'courseStudying', 'groupSubjects', 'firstYearTotalMarks', 'firstYearMaxMarks', 'firstYearPercentage'],
   3: ['bankAccountNumber', 'bankNameBranch', 'ifscCode'],

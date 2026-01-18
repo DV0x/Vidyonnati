@@ -1,8 +1,9 @@
 "use client"
 
 import { useFormContext } from "react-hook-form"
-import { ClipboardCheck, Edit2, User, GraduationCap, Users, FileText, PenLine, Landmark } from "lucide-react"
+import { ClipboardCheck, Edit2, User, GraduationCap, Users, FileText, PenLine, Landmark, Camera } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import Image from "next/image"
 import { type ApplicationType, incomeBracketLabels, incomeBrackets } from "@/lib/schemas/application"
 
 interface ReviewStepProps {
@@ -42,18 +43,39 @@ export function ReviewStep({ applicationType, onEdit }: ReviewStepProps) {
         title="Personal Information"
         onEdit={() => onEdit(0)}
       >
-        <ReviewGrid>
-          <ReviewItem label="Full Name" value={data.fullName} />
-          <ReviewItem label="Email" value={data.email} />
-          <ReviewItem label="Phone" value={data.phone} />
-          <ReviewItem label="Date of Birth" value={data.dateOfBirth} />
-          {isSecondYear && <ReviewItem label="Gender" value={data.gender} />}
-          <ReviewItem label="Village/Town" value={data.village} />
-          <ReviewItem label="Mandal" value={data.mandal} />
-          <ReviewItem label="District" value={data.district} />
-          <ReviewItem label="PIN Code" value={data.pincode} />
-          <ReviewItem label="Address" value={data.address} fullWidth />
-        </ReviewGrid>
+        <div className="flex flex-col sm:flex-row gap-4">
+          {/* Photo Preview */}
+          {data.studentPhoto && (
+            <div className="flex flex-col items-center">
+              <div className="relative w-24 h-28 rounded-lg overflow-hidden border-2 border-primary/20 bg-gray-100">
+                <Image
+                  src={URL.createObjectURL(data.studentPhoto)}
+                  alt="Student Photo"
+                  fill
+                  className="object-cover"
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+                <Camera className="w-3 h-3" />
+                Your Photo
+              </p>
+            </div>
+          )}
+          <div className="flex-1">
+            <ReviewGrid>
+              <ReviewItem label="Full Name" value={data.fullName} />
+              <ReviewItem label="Email" value={data.email} />
+              <ReviewItem label="Phone" value={data.phone} />
+              <ReviewItem label="Date of Birth" value={data.dateOfBirth} />
+              {isSecondYear && <ReviewItem label="Gender" value={data.gender} />}
+              <ReviewItem label="Village/Town" value={data.village} />
+              <ReviewItem label="Mandal" value={data.mandal} />
+              <ReviewItem label="District" value={data.district} />
+              <ReviewItem label="PIN Code" value={data.pincode} />
+              <ReviewItem label="Address" value={data.address} fullWidth />
+            </ReviewGrid>
+          </div>
+        </div>
       </ReviewSection>
 
       {/* Family Details */}
@@ -141,6 +163,7 @@ export function ReviewStep({ applicationType, onEdit }: ReviewStepProps) {
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {isFirstYear ? (
             <>
+              <DocumentBadge label="Student Photo" uploaded={!!data.studentPhoto} />
               <DocumentBadge label="SSC Marksheet" uploaded={!!data.sscMarksheet} />
               <DocumentBadge label="Student Aadhar" uploaded={!!data.aadharStudent} />
               <DocumentBadge label="Parent Aadhar" uploaded={!!data.aadharParent} />
@@ -149,6 +172,7 @@ export function ReviewStep({ applicationType, onEdit }: ReviewStepProps) {
             </>
           ) : (
             <>
+              <DocumentBadge label="Student Photo" uploaded={!!data.studentPhoto} />
               <DocumentBadge label="Student Aadhar" uploaded={!!data.aadharStudent} />
               <DocumentBadge label="Parent Aadhar" uploaded={!!data.aadharParent} />
               <DocumentBadge label="Bank Passbook" uploaded={!!data.bankPassbook} />

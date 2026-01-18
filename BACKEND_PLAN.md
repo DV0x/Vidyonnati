@@ -1470,6 +1470,19 @@ export async function sendAdminNotification(data: {
 - [x] 8.3 Create applications list (/app/dashboard/applications/page.tsx)
 - [x] 8.4 Create application detail page (/app/dashboard/applications/[id]/page.tsx)
 - [x] 8.5 Create profile page (/app/dashboard/profile/page.tsx)
+- [x] 8.6 Create spotlight application detail page (/app/dashboard/spotlight/[id]/page.tsx)
+
+**Bug Fix (2026-01-18): Page Blank on Document Download**
+
+The student dashboard was going blank when users clicked download icons on documents. This was the same issue previously fixed on the admin dashboard.
+
+| File | Issue | Fix |
+|------|-------|-----|
+| `app/dashboard/layout.tsx` | Skeleton showing during auth token refresh | Changed `if (isLoading \|\| !user)` to `if (!user && isLoading)` |
+| `app/dashboard/applications/[id]/page.tsx` | Button onClick triggering re-render | Pre-fetch signed URLs on load, use `<a>` tags |
+| `app/dashboard/spotlight/[id]/page.tsx` | Button asChild wrapper issue | Use plain `<a>` tags for downloads |
+
+**Root Cause:** The auth token refresh (triggered by Supabase storage URL access) caused `isLoading` to briefly become true. With OR logic (`isLoading || !user`), this showed the skeleton even though `user` was still valid. The AND logic (`!user && isLoading`) only shows skeleton on initial page load.
 
 ### Phase 9: API Routes ✅
 - [x] 9.1 Create student profile API (/api/student/profile/route.ts)

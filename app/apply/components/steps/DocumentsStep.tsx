@@ -265,6 +265,7 @@ export function DocumentsStep({ applicationType }: DocumentsStepProps) {
         <div className="grid grid-cols-2 gap-2">
           {isFirstYear ? (
             <>
+              <CheckItem label="Student Photo" checked={!!watch("studentPhoto")} />
               <CheckItem label="SSC Marksheet" checked={!!watch("sscMarksheet")} />
               <CheckItem label="Student Aadhar" checked={!!watch("aadharStudent")} />
               <CheckItem label="Parent Aadhar" checked={!!watch("aadharParent")} />
@@ -273,6 +274,7 @@ export function DocumentsStep({ applicationType }: DocumentsStepProps) {
             </>
           ) : (
             <>
+              <CheckItem label="Student Photo" checked={!!watch("studentPhoto")} />
               <CheckItem label="Student Aadhar" checked={!!watch("aadharStudent")} />
               <CheckItem label="Parent Aadhar" checked={!!watch("aadharParent")} />
               <CheckItem label="Bank Passbook" checked={!!watch("bankPassbook")} />

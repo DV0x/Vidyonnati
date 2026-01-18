@@ -2,6 +2,7 @@
 
 import { useFormContext } from "react-hook-form"
 import { AnimatedInput } from "@/app/components/AnimatedInput"
+import { FileUpload } from "@/app/components/FileUpload"
 import {
   Select,
   SelectContent,
@@ -10,6 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { genderOptions, ApplicationType } from "@/lib/schemas/application"
+import { Camera } from "lucide-react"
 
 interface PersonalInfoStepProps {
   applicationType: ApplicationType
@@ -23,6 +25,30 @@ export function PersonalInfoStep({ applicationType }: PersonalInfoStepProps) {
 
   return (
     <div className="space-y-4">
+      {/* Photo Upload */}
+      <div className="flex flex-col items-center pb-4 border-b border-gray-100">
+        <div className="mb-2 flex items-center gap-2 text-sm font-medium text-gray-700">
+          <Camera className="w-4 h-4" />
+          Your Photo
+          <span className="text-red-500">*</span>
+        </div>
+        <div className="w-full max-w-xs">
+          <FileUpload
+            label=""
+            accept="image/jpeg,image/png,image/webp"
+            maxSize={2}
+            required
+            value={watch("studentPhoto")}
+            onChange={(file) => setValue("studentPhoto", file, { shouldValidate: true })}
+            error={errors.studentPhoto?.message as string}
+            description="Clear, recent passport-size photo (max 2MB)"
+          />
+        </div>
+        <p className="text-xs text-gray-500 mt-2 text-center">
+          This photo will be used for your scholarship application
+        </p>
+      </div>
+
       {/* Full Name - Full width */}
       <div>
         <AnimatedInput
