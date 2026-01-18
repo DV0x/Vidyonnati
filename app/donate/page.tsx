@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { AnimatedInput } from "@/app/components/AnimatedInput"
 import { toast } from "@/components/ui/use-toast"
 import { useDonorContext } from "@/app/context/DonorContext"
-import { Check } from "lucide-react"
+import { Check, Loader2 } from "lucide-react"
 
 const PRESET_AMOUNTS = [
   { value: "500", label: "₹500" },
@@ -26,6 +26,7 @@ export default function DonatePage() {
   const [donorEmail, setDonorEmail] = useState("")
   const [donorPhone, setDonorPhone] = useState("")
   const [errors, setErrors] = useState<{ [key: string]: string }>({})
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const handleAmountSelect = (value: string) => {
     setAmount(value)
@@ -75,23 +76,56 @@ export default function DonatePage() {
     return Object.keys(newErrors).length === 0
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (validateForm()) {
-      const finalAmount = isCustom ? customAmount : amount
-      setDonorInfo({
-        name: donorName,
-        email: donorEmail,
-        phone: donorPhone,
-        amount: finalAmount,
-      })
-      router.push("/donate/wire-transfer")
-    } else {
+    if (!validateForm()) {
       toast({
         title: "Error",
         description: "Please correct the errors in the form",
         variant: "destructive",
       })
+      return
+    }
+
+    setIsSubmitting(true)
+    const finalAmount = isCustom ? customAmount : amount
+
+    try {
+      const response = await fetch('/api/donations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          donor_name: donorName,
+          donor_email: donorEmail,
+          donor_phone: donorPhone,
+          amount: parseFloat(finalAmount),
+        }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to create donation')
+      }
+
+      const data = await response.json()
+
+      setDonorInfo({
+        name: donorName,
+        email: donorEmail,
+        phone: donorPhone,
+        amount: finalAmount,
+        donationId: data.donation_id,
+      })
+      router.push("/donate/wire-transfer")
+    } catch (error) {
+      console.error('Donation error:', error)
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Something went wrong. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -241,9 +275,17 @@ export default function DonatePage() {
               {/* Submit Button */}
               <Button
                 type="submit"
-                className="w-full py-6 text-base font-semibold bg-gradient-to-r from-primary to-orange-500 hover:from-primary/90 hover:to-orange-500/90 rounded-xl shadow-lg shadow-primary/20 transition-all hover:shadow-xl hover:shadow-primary/25 hover:-translate-y-0.5"
+                disabled={isSubmitting}
+                className="w-full py-6 text-base font-semibold bg-gradient-to-r from-primary to-orange-500 hover:from-primary/90 hover:to-orange-500/90 rounded-xl shadow-lg shadow-primary/20 transition-all hover:shadow-xl hover:shadow-primary/25 hover:-translate-y-0.5 disabled:opacity-70 disabled:cursor-not-allowed"
               >
-                Proceed to Payment
+                {isSubmitting ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Processing...
+                  </span>
+                ) : (
+                  "Proceed to Payment"
+                )}
               </Button>
 
               {/* Footer note */}

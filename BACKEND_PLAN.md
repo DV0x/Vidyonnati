@@ -801,7 +801,7 @@ USING (is_admin());
 In Supabase Dashboard → Storage → Create new bucket:
 - **Name:** `application-documents`
 - **Public:** OFF (private)
-- **File size limit:** 5MB
+- **File size limit:** 10MB
 - **Allowed MIME types:** `image/jpeg, image/png, image/webp, application/pdf`
 
 ### Step 3.2: Storage Policies
@@ -1406,18 +1406,18 @@ export async function sendAdminNotification(data: {
 - [x] 8.4 Create application detail page (/app/dashboard/applications/[id]/page.tsx)
 - [x] 8.5 Create profile page (/app/dashboard/profile/page.tsx)
 
-### Phase 9: API Routes
-- [ ] 9.1 Create student profile API
-- [ ] 9.2 Create student applications API
-- [ ] 9.3 Create file upload API
-- [ ] 9.4 Create donations API
-- [ ] 9.5 Create help interest API
+### Phase 9: API Routes ✅
+- [x] 9.1 Create student profile API (/api/student/profile/route.ts)
+- [x] 9.2 Create student applications API (/api/student/applications/route.ts)
+- [x] 9.3 Create file upload API (/api/upload/route.ts)
+- [x] 9.4 Create donations API (/api/donations/route.ts)
+- [x] 9.5 Create help interest API (/api/help-interest/route.ts)
 
-### Phase 10: Update Existing Forms
-- [ ] 10.1 Update ApplicationWizard
-- [ ] 10.2 Update Donate page
-- [ ] 10.3 Update Help Interest modal
-- [ ] 10.4 Update navigation with login links
+### Phase 10: Update Existing Forms ✅
+- [x] 10.1 Update ApplicationWizard (API submission + document uploads)
+- [x] 10.2 Update Donate page (API submission + donation ID)
+- [x] 10.3 Update Help Interest modal (API submission)
+- [x] 10.4 Navigation already has login links (Phase 7)
 
 ### Phase 11: Email Notifications
 - [ ] 11.1 Create email service

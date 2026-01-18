@@ -53,6 +53,12 @@ export default function WireTransferPage() {
             ) : (
               <div className="text-center space-y-4">
                 <p className="text-xl font-semibold text-green-600">Thank You for Your Donation!</p>
+                {donorInfo.donationId && (
+                  <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                    <p className="text-sm text-gray-500 mb-1">Your Donation Reference</p>
+                    <p className="font-mono text-lg font-bold text-gray-900">{donorInfo.donationId}</p>
+                  </div>
+                )}
                 <p>
                   Your wire transfer details have been received. Please complete the transfer using the provided
                   information.

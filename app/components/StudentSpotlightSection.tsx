@@ -114,10 +114,33 @@ function HelpInterestDialog({
   const { isSubmitting } = form.formState
 
   const onSubmit = async (data: HelpInterest) => {
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    console.log("Help interest submitted:", { ...data, studentId: student?.id })
-    setIsSubmitted(true)
+    try {
+      const response = await fetch('/api/help-interest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: data.name,
+          email: data.email,
+          phone: data.phone,
+          help_type: data.helpType,
+          message: data.message || null,
+          student_id: student?.id,
+          student_name: student?.name,
+        }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to submit')
+      }
+
+      setIsSubmitted(true)
+    } catch (error) {
+      console.error('Help interest submission error:', error)
+      form.setError('root', {
+        message: error instanceof Error ? error.message : 'Something went wrong. Please try again.',
+      })
+    }
   }
 
   const handleClose = () => {
@@ -214,6 +237,12 @@ function HelpInterestDialog({
                     <p className="text-red-500 text-sm mt-1">{form.formState.errors.helpType.message}</p>
                   )}
                 </div>
+
+                {form.formState.errors.root && (
+                  <p className="text-red-500 text-sm text-center bg-red-50 p-3 rounded-lg">
+                    {form.formState.errors.root.message}
+                  </p>
+                )}
 
                 <Button
                   type="submit"

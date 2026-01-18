@@ -42,3 +42,7 @@ Thumbs.db
 *.tsbuildinfo
 next-env.d.ts
 .mcp.json
+
+# Test documents
+test-documents/
+scripts/generate-test-docs.mjs

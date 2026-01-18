@@ -8,6 +8,7 @@ interface DonorInfo {
   email: string
   phone: string
   amount: string
+  donationId?: string
 }
 
 interface DonorContextType {

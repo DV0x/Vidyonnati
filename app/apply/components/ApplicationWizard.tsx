@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "motion/react"
 import { useForm, FormProvider } from "react-hook-form"
 import { Button } from "@/components/ui/button"
@@ -10,13 +11,16 @@ import {
   CheckCircle2,
   Loader2,
   Sparkles,
-  RotateCcw
+  RotateCcw,
+  AlertCircle
 } from "lucide-react"
 import { StepProgress } from "./StepProgress"
 import {
   type ApplicationType,
   getStepFields,
 } from "@/lib/schemas/application"
+import { useAuth } from "@/app/context/AuthContext"
+import type { DocumentType } from "@/types/database"
 
 import { PersonalInfoStep } from "./steps/PersonalInfoStep"
 import { FamilyBackgroundStep } from "./steps/FamilyBackgroundStep"
@@ -39,11 +43,15 @@ const STORAGE_KEY_PREFIX = "vidyonnati_application_draft_"
 const STORAGE_EXPIRY = 24 * 60 * 60 * 1000
 
 export function ApplicationWizard() {
+  const router = useRouter()
+  const { user, student, isLoading: authLoading } = useAuth()
   const [applicationType, setApplicationType] = useState<ApplicationType>("first-year")
   const [currentStep, setCurrentStep] = useState(0)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSubmitted, setIsSubmitted] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [applicationId, setApplicationId] = useState<string | null>(null)
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
   const methods = useForm({
     mode: "onChange",
@@ -119,7 +127,23 @@ export function ApplicationWizard() {
     },
   })
 
-  const { trigger, getValues, reset } = methods
+  const { trigger, getValues, reset, setValue } = methods
+
+  // Pre-fill form with student profile data
+  useEffect(() => {
+    if (student) {
+      if (student.full_name) setValue('fullName', student.full_name)
+      if (student.email) setValue('email', student.email)
+      if (student.phone) setValue('phone', student.phone)
+      if (student.date_of_birth) setValue('dateOfBirth', student.date_of_birth)
+      if (student.gender) setValue('gender', student.gender as any)
+      if (student.village) setValue('village', student.village)
+      if (student.mandal) setValue('mandal', student.mandal)
+      if (student.district) setValue('district', student.district)
+      if (student.pincode) setValue('pincode', student.pincode)
+      if (student.address) setValue('address', student.address)
+    }
+  }, [student, setValue])
 
   // Load draft from localStorage
   useEffect(() => {
@@ -222,15 +246,198 @@ export function ApplicationWizard() {
     window.scrollTo({ top: 0, behavior: "smooth" })
   }
 
+  // Helper to get current academic year (e.g., "2024-2025")
+  const getCurrentAcademicYear = () => {
+    const now = new Date()
+    const year = now.getFullYear()
+    const month = now.getMonth() + 1
+    // Academic year starts in June
+    if (month >= 6) {
+      return `${year}-${year + 1}`
+    }
+    return `${year - 1}-${year}`
+  }
+
+  // Upload a single document
+  const uploadDocument = async (
+    applicationId: string,
+    file: File,
+    documentType: DocumentType
+  ) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('applicationId', applicationId)
+    formData.append('documentType', documentType)
+
+    const response = await fetch('/api/upload', {
+      method: 'POST',
+      body: formData,
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.error || `Failed to upload ${documentType}`)
+    }
+
+    return response.json()
+  }
+
   const handleSubmit = async () => {
     setIsSubmitting(true)
-    await new Promise(resolve => setTimeout(resolve, 2000))
+    setSubmitError(null)
 
-    const storageKey = `${STORAGE_KEY_PREFIX}${applicationType}`
-    localStorage.removeItem(storageKey)
+    try {
+      const data = getValues()
 
-    setIsSubmitting(false)
-    setIsSubmitted(true)
+      // Prepare application data
+      const applicationData = {
+        application_type: applicationType,
+        academic_year: getCurrentAcademicYear(),
+
+        // Personal info
+        full_name: data.fullName,
+        email: data.email,
+        phone: data.phone,
+        date_of_birth: data.dateOfBirth,
+        gender: data.gender || null,
+        village: data.village,
+        mandal: data.mandal,
+        district: data.district,
+        pincode: data.pincode,
+        address: data.address,
+
+        // Family info
+        mother_name: data.motherName,
+        father_name: data.fatherName,
+        guardian_name: data.guardianName || null,
+        guardian_relationship: data.guardianRelationship || null,
+        mother_occupation: data.motherOccupation || null,
+        mother_mobile: data.motherMobile || null,
+        father_occupation: data.fatherOccupation || null,
+        father_mobile: data.fatherMobile || null,
+        guardian_details: data.guardianDetails || null,
+        family_adults_count: data.familyAdultsCount || null,
+        family_children_count: data.familyChildrenCount || null,
+        annual_family_income: data.annualFamilyIncome || null,
+
+        // Education info
+        high_school_studied: data.highSchoolStudied,
+        ssc_total_marks: data.sscTotalMarks,
+        ssc_max_marks: data.sscMaxMarks,
+        ssc_percentage: data.sscPercentage,
+        college_address: data.collegeAddress,
+        group_subjects: data.groupSubjects,
+
+        // 1st year specific
+        college_admitted: data.collegeAdmitted || null,
+        course_joined: data.courseJoined || null,
+        date_of_admission: data.dateOfAdmission || null,
+
+        // 2nd year specific
+        current_college: data.currentCollege || null,
+        course_studying: data.courseStudying || null,
+        first_year_total_marks: data.firstYearTotalMarks || null,
+        first_year_max_marks: data.firstYearMaxMarks || null,
+        first_year_percentage: data.firstYearPercentage || null,
+
+        // Bank details
+        bank_account_number: data.bankAccountNumber,
+        bank_name_branch: data.bankNameBranch,
+        ifsc_code: data.ifscCode,
+
+        // Essays (2nd year)
+        study_activities: data.studyActivities || null,
+        goals_dreams: data.goalsDreams || null,
+        additional_info: data.additionalInfo || null,
+      }
+
+      // Submit application
+      const response = await fetch('/api/student/applications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(applicationData),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to submit application')
+      }
+
+      const application = await response.json()
+      setApplicationId(application.application_id)
+
+      // Upload documents
+      const documentUploads: Promise<unknown>[] = []
+
+      // Common documents
+      if (data.sscMarksheet) {
+        documentUploads.push(uploadDocument(application.id, data.sscMarksheet as File, 'ssc_marksheet'))
+      }
+      if (data.aadharStudent) {
+        documentUploads.push(uploadDocument(application.id, data.aadharStudent as File, 'aadhar_student'))
+      }
+      if (data.aadharParent) {
+        documentUploads.push(uploadDocument(application.id, data.aadharParent as File, 'aadhar_parent'))
+      }
+      if (data.bonafideCertificate) {
+        documentUploads.push(uploadDocument(application.id, data.bonafideCertificate as File, 'bonafide_certificate'))
+      }
+      if (data.bankPassbook) {
+        documentUploads.push(uploadDocument(application.id, data.bankPassbook as File, 'bank_passbook'))
+      }
+
+      // 2nd year specific documents
+      if (applicationType === 'second-year') {
+        if (data.firstYearMarksheet) {
+          documentUploads.push(uploadDocument(application.id, data.firstYearMarksheet as File, 'first_year_marksheet'))
+        }
+        if (data.mangoPlantPhoto) {
+          documentUploads.push(uploadDocument(application.id, data.mangoPlantPhoto as File, 'mango_plant_photo'))
+        }
+      }
+
+      // Wait for all uploads
+      await Promise.all(documentUploads)
+
+      // Clear draft from localStorage
+      const storageKey = `${STORAGE_KEY_PREFIX}${applicationType}`
+      localStorage.removeItem(storageKey)
+
+      setIsSubmitted(true)
+    } catch (error) {
+      console.error('Application submission error:', error)
+      setSubmitError(error instanceof Error ? error.message : 'Something went wrong. Please try again.')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  // Auth loading state
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    )
+  }
+
+  // Redirect if not logged in
+  if (!user) {
+    return (
+      <div className="bg-white/80 backdrop-blur-xl rounded-2xl border border-white/50 shadow-xl p-8 text-center">
+        <AlertCircle className="w-12 h-12 text-orange-500 mx-auto mb-4" />
+        <h3 className="text-xl font-bold text-gray-900 mb-2">Login Required</h3>
+        <p className="text-gray-600 mb-6">
+          You need to be logged in to submit a scholarship application.
+        </p>
+        <Button
+          onClick={() => router.push('/login?redirect=/apply')}
+          className="bg-gradient-to-r from-primary to-orange-500 hover:from-primary/90 hover:to-orange-500/90"
+        >
+          Login to Continue
+        </Button>
+      </div>
+    )
   }
 
   // Success state
@@ -280,7 +487,7 @@ export function ApplicationWizard() {
           >
             <p className="text-xs uppercase tracking-wider text-gray-500 mb-2">Your Application ID</p>
             <p className="font-mono text-xl font-bold text-gray-900">
-              VF-{Date.now().toString().slice(-8)}
+              {applicationId || 'Processing...'}
             </p>
             <p className="text-xs text-gray-500 mt-2">Save this for your records</p>
           </motion.div>
@@ -289,10 +496,18 @@ export function ApplicationWizard() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.5 }}
+            className="flex flex-col sm:flex-row gap-3 justify-center"
           >
             <Button
-              onClick={() => window.location.href = "/"}
+              onClick={() => router.push("/dashboard")}
               className="bg-gradient-to-r from-primary to-orange-500 hover:from-primary/90 hover:to-orange-500/90 text-white px-8 py-6 rounded-xl text-base font-semibold shadow-lg shadow-primary/25 transition-all hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5"
+            >
+              View My Applications
+            </Button>
+            <Button
+              onClick={() => router.push("/")}
+              variant="outline"
+              className="px-8 py-6 rounded-xl text-base font-semibold"
             >
               Back to Home
             </Button>
@@ -385,6 +600,17 @@ export function ApplicationWizard() {
             </AnimatePresence>
           </div>
         </div>
+
+        {/* Error Display */}
+        {submitError && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-medium text-red-800">Submission Error</p>
+              <p className="text-sm text-red-600">{submitError}</p>
+            </div>
+          </div>
+        )}
 
         {/* Navigation */}
         <div className="flex items-center gap-3">
