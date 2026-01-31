@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '@/app/context/AuthContext'
-import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -47,24 +46,21 @@ export default function AdminLayout({
   // Fetch additional admin info (name, role) once we know user is admin
   useEffect(() => {
     async function fetchAdminInfo() {
-      if (!user || !isAdmin) return
-
-      const supabase = createClient()
-      const { data: admin } = await supabase
-        .from('admins')
-        .select('name, role')
-        .eq('id', user.id)
-        .single()
-
-      if (admin) {
-        setAdminInfo(admin)
+      try {
+        const res = await fetch('/api/admin/info')
+        if (res.ok) {
+          const admin = await res.json()
+          setAdminInfo(admin)
+        }
+      } catch {
+        // Silently fail - fallback to email display
       }
     }
 
     if (!authLoading && isAdmin) {
       fetchAdminInfo()
     }
-  }, [user, isAdmin, authLoading])
+  }, [isAdmin, authLoading])
 
   // Handle redirects
   useEffect(() => {
@@ -93,7 +89,7 @@ export default function AdminLayout({
     return <AdminSkeleton />
   }
 
-  const displayName = adminInfo?.name || user.email?.split('@')[0] || 'Admin'
+  const displayName = adminInfo?.name || user?.email?.split('@')[0] || 'Admin'
   const displayRole = adminInfo?.role === 'super_admin' ? 'Super Admin' : 'Admin'
 
   return (

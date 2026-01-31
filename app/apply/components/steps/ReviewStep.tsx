@@ -45,7 +45,7 @@ export function ReviewStep({ applicationType, onEdit }: ReviewStepProps) {
       >
         <div className="flex flex-col sm:flex-row gap-4">
           {/* Photo Preview */}
-          {data.studentPhoto && (
+          {data.studentPhoto instanceof File && (
             <div className="flex flex-col items-center">
               <div className="relative w-24 h-28 rounded-lg overflow-hidden border-2 border-primary/20 bg-gray-100">
                 <Image

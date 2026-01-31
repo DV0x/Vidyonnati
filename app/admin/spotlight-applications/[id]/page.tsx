@@ -6,7 +6,6 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { motion } from 'motion/react'
 import type { SpotlightApplication, SpotlightDocument, SpotlightStatus } from '@/types/database'
-import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -71,6 +70,11 @@ const statusConfig: Record<string, { label: string; className: string; icon: Rea
     label: 'Rejected',
     className: 'bg-red-100 text-red-800 border-red-200',
     icon: XCircle,
+  },
+  needs_info: {
+    label: 'Needs Info',
+    className: 'bg-orange-100 text-orange-800 border-orange-200',
+    icon: AlertTriangle,
   },
 }
 
@@ -262,6 +266,7 @@ export default function SpotlightApplicationDetailPage({
                     <SelectItem value="under_review">Under Review</SelectItem>
                     <SelectItem value="approved">Approved</SelectItem>
                     <SelectItem value="rejected">Rejected</SelectItem>
+                    <SelectItem value="needs_info">Needs Info</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

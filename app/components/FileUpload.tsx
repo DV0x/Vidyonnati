@@ -123,8 +123,8 @@ export function FileUpload({
 
   const displayError = error || localError
 
-  const isImage = value?.type.startsWith("image/")
-  const isPdf = value?.type === "application/pdf"
+  const isImage = value instanceof File && value.type.startsWith("image/")
+  const isPdf = value instanceof File && value.type === "application/pdf"
 
   return (
     <div className="space-y-2">

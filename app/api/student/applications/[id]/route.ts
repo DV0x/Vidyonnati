@@ -1,6 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
-import type { SpotlightApplicationUpdate } from '@/types/database'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -19,48 +18,44 @@ export async function GET(request: Request, { params }: RouteParams) {
     )
   }
 
-  const { data: application, error } = await supabase
-    .from('spotlight_applications')
-    .select(`
-      *,
-      spotlight_documents (*)
-    `)
+  // Fetch application ensuring it belongs to the user
+  const { data: application, error: appError } = await supabase
+    .from('applications')
+    .select('*')
     .eq('id', id)
     .eq('student_id', user.id)
     .single()
 
-  if (error) {
+  if (appError || !application) {
     return NextResponse.json(
-      { error: 'Spotlight application not found' },
+      { error: 'Application not found' },
       { status: 404 }
     )
   }
 
-  // Generate signed URLs for documents
-  interface DocumentWithUrl {
-    [key: string]: unknown
-    signedUrl: string | null
-  }
+  // Fetch documents
+  const { data: documents } = await supabase
+    .from('application_documents')
+    .select('*')
+    .eq('application_id', id)
 
-  let documentsWithUrls: DocumentWithUrl[] = []
-  if (application.spotlight_documents && application.spotlight_documents.length > 0) {
-    documentsWithUrls = await Promise.all(
-      application.spotlight_documents.map(async (doc: { storage_path: string; [key: string]: unknown }) => {
-        const { data } = await supabase.storage
-          .from('spotlight-documents')
-          .createSignedUrl(doc.storage_path, 3600) // 1 hour expiry
+  // Generate signed URLs for all documents
+  const documentsWithUrls = await Promise.all(
+    (documents || []).map(async (doc) => {
+      const { data } = await supabase.storage
+        .from('application-documents')
+        .createSignedUrl(doc.storage_path, 3600) // 1 hour expiry
 
-        return {
-          ...doc,
-          signedUrl: data?.signedUrl || null,
-        } as DocumentWithUrl
-      })
-    )
-  }
+      return {
+        ...doc,
+        signedUrl: data?.signedUrl || null,
+      }
+    })
+  )
 
   return NextResponse.json({
     ...application,
-    spotlight_documents: documentsWithUrls,
+    documents: documentsWithUrls,
   })
 }
 
@@ -79,28 +74,28 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 
   // Check if application exists and belongs to user
   const { data: existingApp, error: fetchError } = await supabase
-    .from('spotlight_applications')
-    .select('id, status')
+    .from('applications')
+    .select('id, status, student_id')
     .eq('id', id)
     .eq('student_id', user.id)
     .single()
 
   if (fetchError || !existingApp) {
     return NextResponse.json(
-      { error: 'Spotlight application not found' },
+      { error: 'Application not found' },
       { status: 404 }
     )
   }
 
-  // Only allow updates if status is 'pending' or 'needs_info'
-  if (!['pending', 'needs_info'].includes(existingApp.status)) {
+  // Only allow updates if status is 'needs_info'
+  if (existingApp.status !== 'needs_info') {
     return NextResponse.json(
       { error: 'Cannot update application with current status' },
       { status: 403 }
     )
   }
 
-  let body: Partial<SpotlightApplicationUpdate>
+  let body: Record<string, unknown>
   try {
     body = await request.json()
   } catch {
@@ -112,37 +107,33 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 
   // Remove fields that shouldn't be updated by student
   delete body.id
-  delete body.spotlight_id
+  delete body.application_id
   delete body.student_id
   delete body.status
   delete body.reviewed_by
   delete body.reviewed_at
   delete body.reviewer_notes
-  delete body.is_featured
-  delete body.featured_at
-  delete body.featured_order
-  delete body.photo_url
+  delete body.spotlight_id
   delete body.created_at
 
-  // Add updated_at
-  body.updated_at = new Date().toISOString()
-
-  // If application was in needs_info status, transition to under_review
-  if (existingApp.status === 'needs_info') {
-    (body as Record<string, unknown>).status = 'under_review'
+  // Force status to under_review and set updated_at
+  const updateData = {
+    ...body,
+    status: 'under_review',
+    updated_at: new Date().toISOString(),
   }
 
   const { data: application, error } = await supabase
-    .from('spotlight_applications')
-    .update(body)
+    .from('applications')
+    .update(updateData)
     .eq('id', id)
     .select()
     .single()
 
   if (error) {
-    console.error('Spotlight application update error:', error)
+    console.error('Application update error:', error)
     return NextResponse.json(
-      { error: 'Failed to update spotlight application' },
+      { error: 'Failed to update application' },
       { status: 500 }
     )
   }

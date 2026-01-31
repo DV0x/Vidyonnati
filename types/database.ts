@@ -821,7 +821,7 @@ export type EmailLogInsert = TablesInsert<'email_logs'>
 // Enum-like types
 export type ApplicationType = 'first-year' | 'second-year'
 export type ApplicationStatus = 'pending' | 'under_review' | 'approved' | 'rejected' | 'needs_info'
-export type SpotlightStatus = 'pending' | 'under_review' | 'approved' | 'rejected'
+export type SpotlightStatus = 'pending' | 'under_review' | 'approved' | 'rejected' | 'needs_info'
 export type DonationStatus = 'pending' | 'confirmed' | 'completed' | 'failed' | 'refunded'
 export type HelpType = 'donate' | 'volunteer' | 'corporate' | 'other'
 export type HelpInterestStatus = 'new' | 'contacted' | 'converted' | 'closed'

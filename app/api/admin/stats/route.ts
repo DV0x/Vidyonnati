@@ -19,12 +19,17 @@ export async function GET() {
   // Fetch stats in parallel
   const [
     pendingApplicationsResult,
+    pendingSpotlightResult,
     newHelpInterestsResult,
     pendingDonationsResult,
     featuredStudentsResult,
   ] = await Promise.all([
     supabase
       .from('applications')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'pending'),
+    supabase
+      .from('spotlight_applications')
       .select('id', { count: 'exact', head: true })
       .eq('status', 'pending'),
     supabase
@@ -42,7 +47,7 @@ export async function GET() {
   ])
 
   return NextResponse.json({
-    pendingApplications: pendingApplicationsResult.count ?? 0,
+    pendingApplications: (pendingApplicationsResult.count ?? 0) + (pendingSpotlightResult.count ?? 0),
     newHelpInterests: newHelpInterestsResult.count ?? 0,
     pendingDonations: pendingDonationsResult.count ?? 0,
     featuredStudents: featuredStudentsResult.count ?? 0,

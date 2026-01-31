@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'motion/react'
 import { useAuth } from '@/app/context/AuthContext'
-import { createClient } from '@/lib/supabase/client'
 import type { StudentUpdate } from '@/types/database'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -66,7 +65,6 @@ export default function ProfilePage() {
 
     setIsSaving(true)
 
-    const supabase = createClient()
     const updateData: StudentUpdate = {
       full_name: formData.full_name || null,
       phone: formData.phone || null,
@@ -79,21 +77,27 @@ export default function ProfilePage() {
       address: formData.address || null,
     }
 
-    const { error } = await supabase
-      .from('students')
-      .update(updateData)
-      .eq('id', user.id)
-
-    setIsSaving(false)
-
-    if (error) {
-      toast.error('Failed to update profile', {
-        description: error.message,
+    try {
+      const res = await fetch('/api/student/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updateData),
       })
-    } else {
+
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to update profile')
+      }
+
       toast.success('Profile updated successfully')
       await refreshStudent()
       setIsEditing(false)
+    } catch (err) {
+      toast.error('Failed to update profile', {
+        description: err instanceof Error ? err.message : 'Something went wrong',
+      })
+    } finally {
+      setIsSaving(false)
     }
   }
 

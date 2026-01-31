@@ -35,6 +35,7 @@ import {
   XCircle,
   Sparkles,
   Star,
+  AlertTriangle,
 } from 'lucide-react'
 
 interface SpotlightApplicationsResponse {
@@ -65,6 +66,11 @@ const statusConfig: Record<string, { label: string; className: string; icon: Rea
     label: 'Rejected',
     className: 'bg-red-100 text-red-800 border-red-200',
     icon: XCircle,
+  },
+  needs_info: {
+    label: 'Needs Info',
+    className: 'bg-orange-100 text-orange-800 border-orange-200',
+    icon: AlertTriangle,
   },
 }
 
@@ -192,6 +198,7 @@ export default function SpotlightApplicationsPage() {
                   <SelectItem value="under_review">Under Review</SelectItem>
                   <SelectItem value="approved">Approved</SelectItem>
                   <SelectItem value="rejected">Rejected</SelectItem>
+                  <SelectItem value="needs_info">Needs Info</SelectItem>
                 </SelectContent>
               </Select>
 

@@ -4,17 +4,25 @@ import { useFormContext } from "react-hook-form"
 import { FileUpload } from "@/app/components/FileUpload"
 import { AnimatedTextarea } from "@/app/components/AnimatedTextarea"
 import { type ApplicationType } from "@/lib/schemas/application"
-import { Check, FileText, Leaf, PenLine } from "lucide-react"
+import { Check, FileText, Leaf, PenLine, CheckCircle2 } from "lucide-react"
 
 interface DocumentsStepProps {
   applicationType: ApplicationType
+  editMode?: boolean
+  existingDocuments?: { document_type: string; file_name: string }[]
 }
 
-export function DocumentsStep({ applicationType }: DocumentsStepProps) {
+export function DocumentsStep({ applicationType, editMode, existingDocuments = [] }: DocumentsStepProps) {
   const { setValue, watch, formState: { errors } } = useFormContext()
 
   const isFirstYear = applicationType === "first-year"
   const isSecondYear = applicationType === "second-year"
+
+  const getExistingDoc = (docType: string) =>
+    existingDocuments.find((d) => d.document_type === docType)
+
+  const isDocAvailable = (docType: string, formField: string) =>
+    !!watch(formField) || !!getExistingDoc(docType)
 
   return (
     <div className="space-y-6">
@@ -76,9 +84,13 @@ export function DocumentsStep({ applicationType }: DocumentsStepProps) {
         <div className="flex items-start gap-3">
           <FileText className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
           <div>
-            <p className="text-sm text-blue-800 font-medium">Required Documents</p>
+            <p className="text-sm text-blue-800 font-medium">
+              {editMode ? "Documents (replace only if needed)" : "Required Documents"}
+            </p>
             <p className="text-xs text-blue-600 mt-1">
-              Accepted formats: JPEG, PNG, PDF (Max 5MB each, Photo max 2MB)
+              {editMode
+                ? "Previously uploaded documents are shown below. Upload new files only if you need to replace them."
+                : "Accepted formats: JPEG, PNG, PDF (Max 5MB each, Photo max 2MB)"}
             </p>
           </div>
         </div>
@@ -95,12 +107,13 @@ export function DocumentsStep({ applicationType }: DocumentsStepProps) {
                 label="SSC Marks Sheet (10th)"
                 accept="image/jpeg,image/png,.pdf"
                 maxSize={5}
-                required
+                required={!editMode}
                 value={watch("sscMarksheet")}
                 onChange={(file) => setValue("sscMarksheet", file, { shouldValidate: true })}
                 error={errors.sscMarksheet?.message as string}
                 description="10th class marks memo"
               />
+              <ExistingDocBadge doc={getExistingDoc("ssc_marksheet")} />
             </div>
 
             {/* Aadhar - Student */}
@@ -109,12 +122,13 @@ export function DocumentsStep({ applicationType }: DocumentsStepProps) {
                 label="Aadhar Card - Student"
                 accept="image/jpeg,image/png,.pdf"
                 maxSize={5}
-                required
+                required={!editMode}
                 value={watch("aadharStudent")}
                 onChange={(file) => setValue("aadharStudent", file, { shouldValidate: true })}
                 error={errors.aadharStudent?.message as string}
                 description="Student's Aadhar copy"
               />
+              <ExistingDocBadge doc={getExistingDoc("aadhar_student")} />
             </div>
 
             {/* Aadhar - Parent */}
@@ -123,12 +137,13 @@ export function DocumentsStep({ applicationType }: DocumentsStepProps) {
                 label="Aadhar Card - Parent/Guardian"
                 accept="image/jpeg,image/png,.pdf"
                 maxSize={5}
-                required
+                required={!editMode}
                 value={watch("aadharParent")}
                 onChange={(file) => setValue("aadharParent", file, { shouldValidate: true })}
                 error={errors.aadharParent?.message as string}
                 description="Parent's or guardian's Aadhar"
               />
+              <ExistingDocBadge doc={getExistingDoc("aadhar_parent")} />
             </div>
 
             {/* Bonafide Certificate */}
@@ -137,12 +152,13 @@ export function DocumentsStep({ applicationType }: DocumentsStepProps) {
                 label="Proof of Admission (Bonafide)"
                 accept="image/jpeg,image/png,.pdf"
                 maxSize={5}
-                required
+                required={!editMode}
                 value={watch("bonafideCertificate")}
                 onChange={(file) => setValue("bonafideCertificate", file, { shouldValidate: true })}
                 error={errors.bonafideCertificate?.message as string}
                 description="Study certificate from college"
               />
+              <ExistingDocBadge doc={getExistingDoc("bonafide_certificate")} />
             </div>
 
             {/* Bank Passbook */}
@@ -151,12 +167,13 @@ export function DocumentsStep({ applicationType }: DocumentsStepProps) {
                 label="Bank Passbook - First Page"
                 accept="image/jpeg,image/png,.pdf"
                 maxSize={5}
-                required
+                required={!editMode}
                 value={watch("bankPassbook")}
                 onChange={(file) => setValue("bankPassbook", file, { shouldValidate: true })}
                 error={errors.bankPassbook?.message as string}
                 description="Page showing account details"
               />
+              <ExistingDocBadge doc={getExistingDoc("bank_passbook")} />
             </div>
           </>
         )}
@@ -170,12 +187,13 @@ export function DocumentsStep({ applicationType }: DocumentsStepProps) {
                 label="Aadhar Card - Student"
                 accept="image/jpeg,image/png,.pdf"
                 maxSize={5}
-                required
+                required={!editMode}
                 value={watch("aadharStudent")}
                 onChange={(file) => setValue("aadharStudent", file, { shouldValidate: true })}
                 error={errors.aadharStudent?.message as string}
                 description="Student's Aadhar copy"
               />
+              <ExistingDocBadge doc={getExistingDoc("aadhar_student")} />
             </div>
 
             {/* Aadhar - Parent */}
@@ -184,12 +202,13 @@ export function DocumentsStep({ applicationType }: DocumentsStepProps) {
                 label="Aadhar Card - Parent/Guardian"
                 accept="image/jpeg,image/png,.pdf"
                 maxSize={5}
-                required
+                required={!editMode}
                 value={watch("aadharParent")}
                 onChange={(file) => setValue("aadharParent", file, { shouldValidate: true })}
                 error={errors.aadharParent?.message as string}
                 description="Parent's or guardian's Aadhar"
               />
+              <ExistingDocBadge doc={getExistingDoc("aadhar_parent")} />
             </div>
 
             {/* Bank Passbook */}
@@ -198,12 +217,13 @@ export function DocumentsStep({ applicationType }: DocumentsStepProps) {
                 label="Bank Passbook - First Page"
                 accept="image/jpeg,image/png,.pdf"
                 maxSize={5}
-                required
+                required={!editMode}
                 value={watch("bankPassbook")}
                 onChange={(file) => setValue("bankPassbook", file, { shouldValidate: true })}
                 error={errors.bankPassbook?.message as string}
                 description="Page showing account details"
               />
+              <ExistingDocBadge doc={getExistingDoc("bank_passbook")} />
             </div>
 
             {/* Bonafide Certificate */}
@@ -212,12 +232,13 @@ export function DocumentsStep({ applicationType }: DocumentsStepProps) {
                 label="Study Certificate (Bonafide)"
                 accept="image/jpeg,image/png,.pdf"
                 maxSize={5}
-                required
+                required={!editMode}
                 value={watch("bonafideCertificate")}
                 onChange={(file) => setValue("bonafideCertificate", file, { shouldValidate: true })}
                 error={errors.bonafideCertificate?.message as string}
                 description="Current year study certificate"
               />
+              <ExistingDocBadge doc={getExistingDoc("bonafide_certificate")} />
             </div>
 
             {/* 1st Year Marksheet */}
@@ -226,12 +247,13 @@ export function DocumentsStep({ applicationType }: DocumentsStepProps) {
                 label="1st Year Marks Sheet"
                 accept="image/jpeg,image/png,.pdf"
                 maxSize={5}
-                required
+                required={!editMode}
                 value={watch("firstYearMarksheet")}
                 onChange={(file) => setValue("firstYearMarksheet", file, { shouldValidate: true })}
                 error={errors.firstYearMarksheet?.message as string}
                 description="Previous year marks memo"
               />
+              <ExistingDocBadge doc={getExistingDoc("first_year_marksheet")} />
             </div>
 
             {/* Mango Plant Photo (Optional) */}
@@ -254,6 +276,7 @@ export function DocumentsStep({ applicationType }: DocumentsStepProps) {
                   </span>
                 </div>
               </div>
+              <ExistingDocBadge doc={getExistingDoc("mango_plant_photo")} />
             </div>
           </>
         )}
@@ -265,26 +288,38 @@ export function DocumentsStep({ applicationType }: DocumentsStepProps) {
         <div className="grid grid-cols-2 gap-2">
           {isFirstYear ? (
             <>
-              <CheckItem label="Student Photo" checked={!!watch("studentPhoto")} />
-              <CheckItem label="SSC Marksheet" checked={!!watch("sscMarksheet")} />
-              <CheckItem label="Student Aadhar" checked={!!watch("aadharStudent")} />
-              <CheckItem label="Parent Aadhar" checked={!!watch("aadharParent")} />
-              <CheckItem label="Bonafide" checked={!!watch("bonafideCertificate")} />
-              <CheckItem label="Bank Passbook" checked={!!watch("bankPassbook")} />
+              <CheckItem label="Student Photo" checked={isDocAvailable("student_photo", "studentPhoto")} />
+              <CheckItem label="SSC Marksheet" checked={isDocAvailable("ssc_marksheet", "sscMarksheet")} />
+              <CheckItem label="Student Aadhar" checked={isDocAvailable("aadhar_student", "aadharStudent")} />
+              <CheckItem label="Parent Aadhar" checked={isDocAvailable("aadhar_parent", "aadharParent")} />
+              <CheckItem label="Bonafide" checked={isDocAvailable("bonafide_certificate", "bonafideCertificate")} />
+              <CheckItem label="Bank Passbook" checked={isDocAvailable("bank_passbook", "bankPassbook")} />
             </>
           ) : (
             <>
-              <CheckItem label="Student Photo" checked={!!watch("studentPhoto")} />
-              <CheckItem label="Student Aadhar" checked={!!watch("aadharStudent")} />
-              <CheckItem label="Parent Aadhar" checked={!!watch("aadharParent")} />
-              <CheckItem label="Bank Passbook" checked={!!watch("bankPassbook")} />
-              <CheckItem label="Bonafide" checked={!!watch("bonafideCertificate")} />
-              <CheckItem label="1st Year Marks" checked={!!watch("firstYearMarksheet")} />
-              <CheckItem label="Mango Plant" checked={!!watch("mangoPlantPhoto")} optional />
+              <CheckItem label="Student Photo" checked={isDocAvailable("student_photo", "studentPhoto")} />
+              <CheckItem label="Student Aadhar" checked={isDocAvailable("aadhar_student", "aadharStudent")} />
+              <CheckItem label="Parent Aadhar" checked={isDocAvailable("aadhar_parent", "aadharParent")} />
+              <CheckItem label="Bank Passbook" checked={isDocAvailable("bank_passbook", "bankPassbook")} />
+              <CheckItem label="Bonafide" checked={isDocAvailable("bonafide_certificate", "bonafideCertificate")} />
+              <CheckItem label="1st Year Marks" checked={isDocAvailable("first_year_marksheet", "firstYearMarksheet")} />
+              <CheckItem label="Mango Plant" checked={isDocAvailable("mango_plant_photo", "mangoPlantPhoto")} optional />
             </>
           )}
         </div>
       </div>
+    </div>
+  )
+}
+
+function ExistingDocBadge({ doc }: { doc?: { document_type: string; file_name: string } }) {
+  if (!doc) return null
+  return (
+    <div className="flex items-center gap-1.5 mt-1.5 px-2 py-1 bg-green-50 border border-green-200 rounded-md">
+      <CheckCircle2 className="w-3.5 h-3.5 text-green-600 flex-shrink-0" />
+      <span className="text-xs text-green-700 truncate">
+        Uploaded: {doc.file_name}
+      </span>
     </div>
   )
 }

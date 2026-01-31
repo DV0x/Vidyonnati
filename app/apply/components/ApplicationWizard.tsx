@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { motion, AnimatePresence } from "motion/react"
 import { useForm, FormProvider } from "react-hook-form"
 import { Button } from "@/components/ui/button"
@@ -42,16 +43,72 @@ const STEPS = [
 const STORAGE_KEY_PREFIX = "vidyonnati_application_draft_"
 const STORAGE_EXPIRY = 24 * 60 * 60 * 1000
 
-export function ApplicationWizard() {
+interface ApplicationWizardProps {
+  editApplicationId?: string
+  editApplicationType?: ApplicationType
+}
+
+// Field mapping: DB snake_case → form camelCase
+const DB_TO_FORM_MAP: Record<string, string> = {
+  full_name: 'fullName',
+  email: 'email',
+  phone: 'phone',
+  date_of_birth: 'dateOfBirth',
+  gender: 'gender',
+  village: 'village',
+  mandal: 'mandal',
+  district: 'district',
+  pincode: 'pincode',
+  address: 'address',
+  mother_name: 'motherName',
+  father_name: 'fatherName',
+  guardian_name: 'guardianName',
+  guardian_relationship: 'guardianRelationship',
+  mother_occupation: 'motherOccupation',
+  mother_mobile: 'motherMobile',
+  father_occupation: 'fatherOccupation',
+  father_mobile: 'fatherMobile',
+  guardian_details: 'guardianDetails',
+  family_adults_count: 'familyAdultsCount',
+  family_children_count: 'familyChildrenCount',
+  annual_family_income: 'annualFamilyIncome',
+  high_school_studied: 'highSchoolStudied',
+  ssc_total_marks: 'sscTotalMarks',
+  ssc_max_marks: 'sscMaxMarks',
+  ssc_percentage: 'sscPercentage',
+  college_address: 'collegeAddress',
+  group_subjects: 'groupSubjects',
+  college_admitted: 'collegeAdmitted',
+  course_joined: 'courseJoined',
+  date_of_admission: 'dateOfAdmission',
+  current_college: 'currentCollege',
+  course_studying: 'courseStudying',
+  first_year_total_marks: 'firstYearTotalMarks',
+  first_year_max_marks: 'firstYearMaxMarks',
+  first_year_percentage: 'firstYearPercentage',
+  bank_account_number: 'bankAccountNumber',
+  bank_name_branch: 'bankNameBranch',
+  ifsc_code: 'ifscCode',
+  study_activities: 'studyActivities',
+  goals_dreams: 'goalsDreams',
+  additional_info: 'additionalInfo',
+}
+
+export function ApplicationWizard({ editApplicationId, editApplicationType }: ApplicationWizardProps) {
   const router = useRouter()
   const { user, student, isLoading: authLoading } = useAuth()
-  const [applicationType, setApplicationType] = useState<ApplicationType>("first-year")
+  const [applicationType, setApplicationType] = useState<ApplicationType>(editApplicationType || "first-year")
   const [currentStep, setCurrentStep] = useState(0)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSubmitted, setIsSubmitted] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [applicationId, setApplicationId] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [isLoadingEdit, setIsLoadingEdit] = useState(!!editApplicationId)
+  const [editDbId, setEditDbId] = useState<string | null>(null)
+  const [existingDocuments, setExistingDocuments] = useState<{document_type: string, file_name: string}[]>([])
+
+  const isEditMode = !!editApplicationId
 
   const methods = useForm({
     mode: "onChange",
@@ -109,6 +166,9 @@ export function ApplicationWizard() {
       bankNameBranch: "",
       ifscCode: "",
 
+      // Student photo
+      studentPhoto: null as File | null,
+
       // Documents (1st year)
       sscMarksheet: null,
       aadharStudent: null,
@@ -129,8 +189,59 @@ export function ApplicationWizard() {
 
   const { trigger, getValues, reset, setValue } = methods
 
-  // Pre-fill form with student profile data
+  // Fetch existing application data in edit mode
   useEffect(() => {
+    if (!editApplicationId) return
+
+    async function fetchEditData() {
+      setIsLoadingEdit(true)
+      try {
+        const res = await fetch(`/api/student/applications/${editApplicationId}`)
+        if (!res.ok) {
+          setSubmitError('Failed to load application for editing')
+          setIsLoadingEdit(false)
+          return
+        }
+
+        const data = await res.json()
+        const { documents, ...appData } = data
+
+        // Store the DB id and documents
+        setEditDbId(appData.id)
+        if (documents) {
+          setExistingDocuments(documents.map((d: { document_type: string; file_name: string }) => ({
+            document_type: d.document_type,
+            file_name: d.file_name,
+          })))
+        }
+
+        // Set application type from edit data
+        if (appData.application_type) {
+          setApplicationType(appData.application_type)
+        }
+
+        // Map DB fields to form fields
+        const formData: Record<string, unknown> = {}
+        for (const [dbKey, formKey] of Object.entries(DB_TO_FORM_MAP)) {
+          if (appData[dbKey] !== null && appData[dbKey] !== undefined) {
+            formData[formKey] = appData[dbKey]
+          }
+        }
+
+        reset((prev) => ({ ...prev, ...formData }))
+      } catch {
+        setSubmitError('Failed to load application for editing')
+      } finally {
+        setIsLoadingEdit(false)
+      }
+    }
+
+    fetchEditData()
+  }, [editApplicationId, reset])
+
+  // Pre-fill form with student profile data (skip in edit mode)
+  useEffect(() => {
+    if (isEditMode) return
     if (student) {
       if (student.full_name) setValue('fullName', student.full_name)
       if (student.email) setValue('email', student.email)
@@ -143,10 +254,11 @@ export function ApplicationWizard() {
       if (student.pincode) setValue('pincode', student.pincode)
       if (student.address) setValue('address', student.address)
     }
-  }, [student, setValue])
+  }, [student, setValue, isEditMode])
 
-  // Load draft from localStorage
+  // Load draft from localStorage (skip in edit mode)
   useEffect(() => {
+    if (isEditMode) return
     const storageKey = `${STORAGE_KEY_PREFIX}${applicationType}`
     const savedDraft = localStorage.getItem(storageKey)
 
@@ -164,16 +276,18 @@ export function ApplicationWizard() {
         console.error("Failed to restore draft:", e)
       }
     }
-  }, [applicationType, reset])
+  }, [applicationType, reset, isEditMode])
 
-  // Save draft to localStorage
+  // Save draft to localStorage (skip in edit mode)
   const saveDraft = useCallback(() => {
+    if (isEditMode) return
     setIsSaving(true)
     const storageKey = `${STORAGE_KEY_PREFIX}${applicationType}`
     const data = getValues()
 
     // Exclude file objects from saving
     const {
+      studentPhoto,
       sscMarksheet,
       aadharStudent,
       aadharParent,
@@ -191,7 +305,7 @@ export function ApplicationWizard() {
     }))
 
     setTimeout(() => setIsSaving(false), 500)
-  }, [applicationType, currentStep, getValues])
+  }, [applicationType, currentStep, getValues, isEditMode])
 
   // Auto-save on step change
   useEffect(() => {
@@ -260,13 +374,13 @@ export function ApplicationWizard() {
 
   // Upload a single document
   const uploadDocument = async (
-    applicationId: string,
+    appId: string,
     file: File,
     documentType: DocumentType
   ) => {
     const formData = new FormData()
     formData.append('file', file)
-    formData.append('applicationId', applicationId)
+    formData.append('applicationId', appId)
     formData.append('documentType', documentType)
 
     const response = await fetch('/api/upload', {
@@ -290,10 +404,7 @@ export function ApplicationWizard() {
       const data = getValues()
 
       // Prepare application data
-      const applicationData = {
-        application_type: applicationType,
-        academic_year: getCurrentAcademicYear(),
-
+      const applicationData: Record<string, unknown> = {
         // Personal info
         full_name: data.fullName,
         email: data.email,
@@ -351,57 +462,91 @@ export function ApplicationWizard() {
         additional_info: data.additionalInfo || null,
       }
 
-      // Submit application
-      const response = await fetch('/api/student/applications', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(applicationData),
-      })
+      let appId: string
+      let appApplicationId: string
 
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Failed to submit application')
+      if (isEditMode && editDbId) {
+        // PATCH existing application
+        const response = await fetch(`/api/student/applications/${editDbId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(applicationData),
+        })
+
+        if (!response.ok) {
+          const error = await response.json()
+          throw new Error(error.error || 'Failed to update application')
+        }
+
+        const application = await response.json()
+        appId = application.id
+        appApplicationId = application.application_id
+      } else {
+        // POST new application
+        applicationData.application_type = applicationType
+        applicationData.academic_year = getCurrentAcademicYear()
+
+        const response = await fetch('/api/student/applications', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(applicationData),
+        })
+
+        if (!response.ok) {
+          const error = await response.json()
+          throw new Error(error.error || 'Failed to submit application')
+        }
+
+        const application = await response.json()
+        appId = application.id
+        appApplicationId = application.application_id
       }
 
-      const application = await response.json()
-      setApplicationId(application.application_id)
+      setApplicationId(appApplicationId)
 
-      // Upload documents
+      // Upload documents (only new files where user selected them)
       const documentUploads: Promise<unknown>[] = []
+
+      // Student photo
+      if (data.studentPhoto) {
+        documentUploads.push(uploadDocument(appId, data.studentPhoto as File, 'student_photo'))
+      }
 
       // Common documents
       if (data.sscMarksheet) {
-        documentUploads.push(uploadDocument(application.id, data.sscMarksheet as File, 'ssc_marksheet'))
+        documentUploads.push(uploadDocument(appId, data.sscMarksheet as File, 'ssc_marksheet'))
       }
       if (data.aadharStudent) {
-        documentUploads.push(uploadDocument(application.id, data.aadharStudent as File, 'aadhar_student'))
+        documentUploads.push(uploadDocument(appId, data.aadharStudent as File, 'aadhar_student'))
       }
       if (data.aadharParent) {
-        documentUploads.push(uploadDocument(application.id, data.aadharParent as File, 'aadhar_parent'))
+        documentUploads.push(uploadDocument(appId, data.aadharParent as File, 'aadhar_parent'))
       }
       if (data.bonafideCertificate) {
-        documentUploads.push(uploadDocument(application.id, data.bonafideCertificate as File, 'bonafide_certificate'))
+        documentUploads.push(uploadDocument(appId, data.bonafideCertificate as File, 'bonafide_certificate'))
       }
       if (data.bankPassbook) {
-        documentUploads.push(uploadDocument(application.id, data.bankPassbook as File, 'bank_passbook'))
+        documentUploads.push(uploadDocument(appId, data.bankPassbook as File, 'bank_passbook'))
       }
 
       // 2nd year specific documents
       if (applicationType === 'second-year') {
         if (data.firstYearMarksheet) {
-          documentUploads.push(uploadDocument(application.id, data.firstYearMarksheet as File, 'first_year_marksheet'))
+          documentUploads.push(uploadDocument(appId, data.firstYearMarksheet as File, 'first_year_marksheet'))
         }
         if (data.mangoPlantPhoto) {
-          documentUploads.push(uploadDocument(application.id, data.mangoPlantPhoto as File, 'mango_plant_photo'))
+          documentUploads.push(uploadDocument(appId, data.mangoPlantPhoto as File, 'mango_plant_photo'))
         }
       }
 
       // Wait for all uploads
       await Promise.all(documentUploads)
 
-      // Clear draft from localStorage
-      const storageKey = `${STORAGE_KEY_PREFIX}${applicationType}`
-      localStorage.removeItem(storageKey)
+      // Clear draft from localStorage (only for new applications)
+      if (!isEditMode) {
+        const storageKey = `${STORAGE_KEY_PREFIX}${applicationType}`
+        localStorage.removeItem(storageKey)
+      }
 
       setIsSubmitted(true)
     } catch (error) {
@@ -413,7 +558,7 @@ export function ApplicationWizard() {
   }
 
   // Auth loading state
-  if (authLoading) {
+  if (authLoading || isLoadingEdit) {
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -472,10 +617,12 @@ export function ApplicationWizard() {
             transition={{ delay: 0.3 }}
           >
             <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-3">
-              Application Submitted!
+              {isEditMode ? "Application Resubmitted!" : "Application Submitted!"}
             </h2>
             <p className="text-gray-600 mb-8 max-w-sm mx-auto">
-              Thank you for applying. We&apos;ll review your application and get back to you within 7-10 business days.
+              {isEditMode
+                ? "Your updated application has been resubmitted for review."
+                : "Thank you for applying. We'll review your application and get back to you within 7-10 business days."}
             </p>
           </motion.div>
 
@@ -498,12 +645,23 @@ export function ApplicationWizard() {
             transition={{ delay: 0.5 }}
             className="flex flex-col sm:flex-row gap-3 justify-center"
           >
-            <Button
-              onClick={() => router.push("/dashboard")}
-              className="bg-gradient-to-r from-primary to-orange-500 hover:from-primary/90 hover:to-orange-500/90 text-white px-8 py-6 rounded-xl text-base font-semibold shadow-lg shadow-primary/25 transition-all hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5"
-            >
-              View My Applications
-            </Button>
+            {isEditMode && editDbId ? (
+              <Button
+                asChild
+                className="bg-gradient-to-r from-primary to-orange-500 hover:from-primary/90 hover:to-orange-500/90 text-white px-8 py-6 rounded-xl text-base font-semibold shadow-lg shadow-primary/25 transition-all hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5"
+              >
+                <Link href={`/dashboard/applications/${editDbId}`}>
+                  View Application
+                </Link>
+              </Button>
+            ) : (
+              <Button
+                onClick={() => router.push("/dashboard")}
+                className="bg-gradient-to-r from-primary to-orange-500 hover:from-primary/90 hover:to-orange-500/90 text-white px-8 py-6 rounded-xl text-base font-semibold shadow-lg shadow-primary/25 transition-all hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5"
+              >
+                View My Applications
+              </Button>
+            )}
             <Button
               onClick={() => router.push("/")}
               variant="outline"
@@ -520,51 +678,53 @@ export function ApplicationWizard() {
   return (
     <FormProvider {...methods}>
       <div className="space-y-4">
-        {/* Application Type Toggle */}
-        <div className="flex gap-2 p-1 bg-gray-100 rounded-xl">
-          <button
-            type="button"
-            onClick={() => handleTypeChange("first-year")}
-            className={`relative flex-1 py-2.5 px-3 rounded-lg text-sm font-medium transition-all duration-200 ${
-              applicationType === "first-year"
-                ? "text-white"
-                : "text-gray-600 hover:text-gray-900"
-            }`}
-          >
-            {applicationType === "first-year" && (
-              <motion.div
-                layoutId="activeType"
-                className="absolute inset-0 bg-gradient-to-r from-primary to-orange-500 rounded-lg shadow-md"
-                transition={{ type: "spring", stiffness: 400, damping: 30 }}
-              />
-            )}
-            <span className="relative flex items-center justify-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5" />
-              New
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={() => handleTypeChange("second-year")}
-            className={`relative flex-1 py-2.5 px-3 rounded-lg text-sm font-medium transition-all duration-200 ${
-              applicationType === "second-year"
-                ? "text-white"
-                : "text-gray-600 hover:text-gray-900"
-            }`}
-          >
-            {applicationType === "second-year" && (
-              <motion.div
-                layoutId="activeType"
-                className="absolute inset-0 bg-gradient-to-r from-primary to-orange-500 rounded-lg shadow-md"
-                transition={{ type: "spring", stiffness: 400, damping: 30 }}
-              />
-            )}
-            <span className="relative flex items-center justify-center gap-1.5">
-              <RotateCcw className="w-3.5 h-3.5" />
-              Renewal
-            </span>
-          </button>
-        </div>
+        {/* Application Type Toggle - hidden in edit mode */}
+        {!isEditMode && (
+          <div className="flex gap-2 p-1 bg-gray-100 rounded-xl">
+            <button
+              type="button"
+              onClick={() => handleTypeChange("first-year")}
+              className={`relative flex-1 py-2.5 px-3 rounded-lg text-sm font-medium transition-all duration-200 ${
+                applicationType === "first-year"
+                  ? "text-white"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              {applicationType === "first-year" && (
+                <motion.div
+                  layoutId="activeType"
+                  className="absolute inset-0 bg-gradient-to-r from-primary to-orange-500 rounded-lg shadow-md"
+                  transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                />
+              )}
+              <span className="relative flex items-center justify-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5" />
+                New
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleTypeChange("second-year")}
+              className={`relative flex-1 py-2.5 px-3 rounded-lg text-sm font-medium transition-all duration-200 ${
+                applicationType === "second-year"
+                  ? "text-white"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              {applicationType === "second-year" && (
+                <motion.div
+                  layoutId="activeType"
+                  className="absolute inset-0 bg-gradient-to-r from-primary to-orange-500 rounded-lg shadow-md"
+                  transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                />
+              )}
+              <span className="relative flex items-center justify-center gap-1.5">
+                <RotateCcw className="w-3.5 h-3.5" />
+                Renewal
+              </span>
+            </button>
+          </div>
+        )}
 
         {/* Progress */}
         <StepProgress
@@ -589,7 +749,13 @@ export function ApplicationWizard() {
                 {currentStep === 1 && <FamilyBackgroundStep applicationType={applicationType} />}
                 {currentStep === 2 && <EducationStep applicationType={applicationType} />}
                 {currentStep === 3 && <BankDetailsStep />}
-                {currentStep === 4 && <DocumentsStep applicationType={applicationType} />}
+                {currentStep === 4 && (
+                  <DocumentsStep
+                    applicationType={applicationType}
+                    editMode={isEditMode}
+                    existingDocuments={existingDocuments}
+                  />
+                )}
                 {currentStep === 5 && (
                   <ReviewStep
                     applicationType={applicationType}
@@ -656,12 +822,12 @@ export function ApplicationWizard() {
                 {isSubmitting ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    Submitting...
+                    {isEditMode ? "Resubmitting..." : "Submitting..."}
                   </>
                 ) : (
                   <>
                     <Sparkles className="w-4 h-4" />
-                    Submit
+                    {isEditMode ? "Resubmit" : "Submit"}
                   </>
                 )}
               </Button>

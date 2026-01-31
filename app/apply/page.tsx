@@ -1,9 +1,17 @@
 "use client"
 
+import { Suspense } from "react"
+import { useSearchParams } from "next/navigation"
 import { motion } from "motion/react"
+import { Loader2 } from "lucide-react"
 import { ApplicationWizard } from "./components/ApplicationWizard"
+import type { ApplicationType } from "@/lib/schemas/application"
 
-export default function ApplyPage() {
+function ApplyPageContent() {
+  const searchParams = useSearchParams()
+  const editId = searchParams.get("edit") || undefined
+  const editType = (searchParams.get("type") as ApplicationType) || undefined
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-orange-50/30 to-rose-50/40 relative overflow-hidden">
       {/* Decorative background elements */}
@@ -24,10 +32,12 @@ export default function ApplyPage() {
             className="mb-5"
           >
             <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
-              Apply for Scholarship
+              {editId ? "Edit & Resubmit Application" : "Apply for Scholarship"}
             </h1>
             <p className="text-sm text-gray-500 mt-1">
-              Complete the form below to submit your application
+              {editId
+                ? "Update your application and resubmit for review"
+                : "Complete the form below to submit your application"}
             </p>
           </motion.div>
 
@@ -37,10 +47,27 @@ export default function ApplyPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.1 }}
           >
-            <ApplicationWizard />
+            <ApplicationWizard
+              editApplicationId={editId}
+              editApplicationType={editType}
+            />
           </motion.div>
         </div>
       </div>
     </div>
+  )
+}
+
+export default function ApplyPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      }
+    >
+      <ApplyPageContent />
+    </Suspense>
   )
 }

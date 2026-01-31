@@ -103,22 +103,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setIsLoading(false)
           initializedRef.current = true
         } else if (event === 'SIGNED_IN') {
-          // Actual sign-in action (login form, OAuth callback).
-          // Skip if this fires during initialization (some Supabase versions
-          // fire SIGNED_IN after INITIAL_SESSION for existing sessions).
-          if (!initializedRef.current) {
-            initializedRef.current = true
-          }
-
-          setIsLoading(true)
           setSession(session)
           setUser(session?.user ?? null)
 
-          if (session?.user) {
-            await fetchUserData(session.user.id)
+          if (!initializedRef.current) {
+            // First sign-in during app startup (some Supabase versions
+            // fire SIGNED_IN after INITIAL_SESSION for existing sessions).
+            initializedRef.current = true
+            setIsLoading(true)
+            if (session?.user) {
+              await fetchUserData(session.user.id)
+            }
+            setIsLoading(false)
+          } else {
+            // Post-init SIGNED_IN: session recovery after idle / tab
+            // reactivation. Silently refresh user data in the background
+            // without showing a loading spinner.
+            if (session?.user) {
+              await fetchUserData(session.user.id)
+            }
           }
-
-          setIsLoading(false)
         } else if (event === 'TOKEN_REFRESHED') {
           // Silent token refresh — update session/user, no data re-fetch
           setSession(session)

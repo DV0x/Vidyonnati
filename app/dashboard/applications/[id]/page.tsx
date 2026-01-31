@@ -4,8 +4,6 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { motion } from 'motion/react'
-import { useAuth } from '@/app/context/AuthContext'
-import { createClient } from '@/lib/supabase/client'
 import type { Application, ApplicationDocument } from '@/types/database'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -29,7 +27,9 @@ import {
   Download,
   Users,
   BookOpen,
+  Pencil,
 } from 'lucide-react'
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
 
 interface ApplicationDocumentWithUrl extends ApplicationDocument {
   signedUrl?: string | null
@@ -80,7 +80,6 @@ const documentTypeLabels: Record<string, string> = {
 
 export default function ApplicationDetailPage() {
   const params = useParams()
-  const { user } = useAuth()
   const [application, setApplication] = useState<Application | null>(null)
   const [documents, setDocuments] = useState<ApplicationDocumentWithUrl[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -90,53 +89,30 @@ export default function ApplicationDetailPage() {
 
   useEffect(() => {
     async function fetchApplication() {
-      if (!user || !applicationId) return
+      if (!applicationId) return
 
-      const supabase = createClient()
+      try {
+        const res = await fetch(`/api/student/applications/${applicationId}`)
 
-      // Fetch application
-      const { data: appData, error: appError } = await supabase
-        .from('applications')
-        .select('*')
-        .eq('id', applicationId)
-        .eq('student_id', user.id)
-        .single()
+        if (!res.ok) {
+          setError('Application not found')
+          return
+        }
 
-      if (appError || !appData) {
-        setError('Application not found')
+        const data = await res.json()
+        const { documents: docs, ...applicationData } = data
+
+        setApplication(applicationData)
+        setDocuments(docs || [])
+      } catch {
+        setError('Failed to load application')
+      } finally {
         setIsLoading(false)
-        return
       }
-
-      setApplication(appData)
-
-      // Fetch documents
-      const { data: docsData } = await supabase
-        .from('application_documents')
-        .select('*')
-        .eq('application_id', applicationId)
-
-      if (docsData && docsData.length > 0) {
-        // Generate signed URLs for all documents
-        const docsWithUrls = await Promise.all(
-          docsData.map(async (doc) => {
-            const { data: signedUrlData } = await supabase.storage
-              .from('application-documents')
-              .createSignedUrl(doc.storage_path, 3600) // 1 hour expiry
-            return {
-              ...doc,
-              signedUrl: signedUrlData?.signedUrl || null,
-            }
-          })
-        )
-        setDocuments(docsWithUrls)
-      }
-
-      setIsLoading(false)
     }
 
     fetchApplication()
-  }, [user, applicationId])
+  }, [applicationId])
 
   if (isLoading) {
     return <ApplicationDetailSkeleton />
@@ -237,6 +213,37 @@ export default function ApplicationDetailPage() {
           </CardContent>
         </Card>
       </motion.div>
+
+      {/* Needs Info Banner */}
+      {application.status === 'needs_info' && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.17 }}
+        >
+          <Alert className="border-orange-300 bg-orange-50">
+            <AlertCircle className="h-5 w-5 text-orange-600" />
+            <AlertTitle className="text-orange-800 font-semibold">
+              Additional Information Required
+            </AlertTitle>
+            <AlertDescription className="text-orange-700">
+              {application.reviewer_notes && (
+                <p className="mt-1 mb-3">{application.reviewer_notes}</p>
+              )}
+              <Button
+                asChild
+                size="sm"
+                className="bg-orange-600 hover:bg-orange-700 text-white"
+              >
+                <Link href={`/apply?edit=${application.id}&type=${application.application_type}`}>
+                  <Pencil className="h-4 w-4 mr-2" />
+                  Edit &amp; Resubmit
+                </Link>
+              </Button>
+            </AlertDescription>
+          </Alert>
+        </motion.div>
+      )}
 
       {/* Application Details */}
       <div className="grid gap-6 lg:grid-cols-2">

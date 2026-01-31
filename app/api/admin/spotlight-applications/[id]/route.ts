@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import type { SpotlightStatus, AdminActivityLogInsert } from '@/types/database'
 
-const VALID_STATUSES: SpotlightStatus[] = ['pending', 'under_review', 'approved', 'rejected']
+const VALID_STATUSES: SpotlightStatus[] = ['pending', 'under_review', 'approved', 'rejected', 'needs_info']
 
 export async function GET(
   request: NextRequest,

@@ -60,7 +60,7 @@ export default function DashboardLayout({
     return <DashboardSkeleton />
   }
 
-  const displayName = student?.full_name || user.email?.split('@')[0] || 'Student'
+  const displayName = student?.full_name || user?.email?.split('@')[0] || 'Student'
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -140,7 +140,7 @@ export default function DashboardLayout({
               <p className="text-sm font-medium text-gray-900 truncate">
                 {displayName}
               </p>
-              <p className="text-xs text-gray-500 truncate">{user.email}</p>
+              <p className="text-xs text-gray-500 truncate">{user?.email}</p>
             </div>
             <button
               onClick={handleSignOut}

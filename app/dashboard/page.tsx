@@ -111,25 +111,25 @@ export default function DashboardPage() {
       >
         <StatsCard
           title="Total Applications"
-          value={isLoading ? '-' : applications.length.toString()}
+          value={isLoading ? '-' : (applications.length + spotlightApplications.length).toString()}
           icon={FileText}
           color="primary"
         />
         <StatsCard
           title="Pending"
-          value={isLoading ? '-' : applications.filter(a => a.status === 'pending').length.toString()}
+          value={isLoading ? '-' : (applications.filter(a => a.status === 'pending').length + spotlightApplications.filter(a => a.status === 'pending').length).toString()}
           icon={Clock}
           color="yellow"
         />
         <StatsCard
           title="Approved"
-          value={isLoading ? '-' : applications.filter(a => a.status === 'approved').length.toString()}
+          value={isLoading ? '-' : (applications.filter(a => a.status === 'approved').length + spotlightApplications.filter(a => a.status === 'approved').length).toString()}
           icon={CheckCircle2}
           color="green"
         />
         <StatsCard
           title="Under Review"
-          value={isLoading ? '-' : applications.filter(a => a.status === 'under_review').length.toString()}
+          value={isLoading ? '-' : (applications.filter(a => a.status === 'under_review').length + spotlightApplications.filter(a => a.status === 'under_review').length).toString()}
           icon={Eye}
           color="blue"
         />

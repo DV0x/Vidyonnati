@@ -32,6 +32,7 @@ import {
   MapPin,
   Phone,
   Mail,
+  Pencil,
 } from "lucide-react"
 import {
   parentStatusLabels,
@@ -236,6 +237,35 @@ export default function SpotlightDetailPage({
                   Reviewer Notes
                 </p>
                 <p className="text-sm text-orange-700">{application.reviewer_notes}</p>
+                {application.status === "needs_info" && (
+                  <Button
+                    asChild
+                    size="sm"
+                    className="mt-3 bg-orange-600 hover:bg-orange-700 text-white"
+                  >
+                    <Link href={`/spotlight/apply?edit=${application.id}`}>
+                      <Pencil className="h-4 w-4 mr-2" />
+                      Edit &amp; Resubmit
+                    </Link>
+                  </Button>
+                )}
+              </div>
+            )}
+            {application.status === "needs_info" && !application.reviewer_notes && (
+              <div className="mt-4 p-3 bg-orange-50 rounded-lg border border-orange-100">
+                <p className="text-sm text-orange-700 mb-3">
+                  Additional information is needed for your application.
+                </p>
+                <Button
+                  asChild
+                  size="sm"
+                  className="bg-orange-600 hover:bg-orange-700 text-white"
+                >
+                  <Link href={`/spotlight/apply?edit=${application.id}`}>
+                    <Pencil className="h-4 w-4 mr-2" />
+                    Edit &amp; Resubmit
+                  </Link>
+                </Button>
               </div>
             )}
           </CardContent>

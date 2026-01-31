@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { motion, AnimatePresence } from "motion/react"
 import { useForm, FormProvider } from "react-hook-form"
 import { Button } from "@/components/ui/button"
@@ -41,7 +42,51 @@ const STEPS = [
 const STORAGE_KEY = "vidyonnati_spotlight_draft"
 const STORAGE_EXPIRY = 24 * 60 * 60 * 1000
 
-export function SpotlightWizard() {
+interface SpotlightWizardProps {
+  editApplicationId?: string
+}
+
+// Field mapping: DB snake_case → form camelCase
+const DB_TO_FORM_MAP: Record<string, string> = {
+  full_name: 'fullName',
+  date_of_birth: 'dateOfBirth',
+  gender: 'gender',
+  phone: 'phone',
+  email: 'email',
+  village: 'village',
+  mandal: 'mandal',
+  district: 'district',
+  state: 'state',
+  pincode: 'pincode',
+  college_name: 'collegeName',
+  course_stream: 'courseStream',
+  year_of_completion: 'yearOfCompletion',
+  total_marks: 'totalMarks',
+  max_marks: 'maxMarks',
+  percentage: 'percentage',
+  current_status: 'currentStatus',
+  competitive_exams: 'competitiveExams',
+  parent_status: 'parentStatus',
+  mother_name: 'motherName',
+  mother_occupation: 'motherOccupation',
+  mother_health: 'motherHealth',
+  father_name: 'fatherName',
+  father_occupation: 'fatherOccupation',
+  father_health: 'fatherHealth',
+  guardian_name: 'guardianName',
+  guardian_relationship: 'guardianRelationship',
+  guardian_details: 'guardianDetails',
+  siblings_count: 'siblingsCount',
+  annual_family_income: 'annualFamilyIncome',
+  circumstances: 'circumstances',
+  circumstances_other: 'circumstancesOther',
+  background_story: 'backgroundStory',
+  dreams_goals: 'dreamsGoals',
+  how_help_changes_life: 'howHelpChangesLife',
+  annual_financial_need: 'annualFinancialNeed',
+}
+
+export function SpotlightWizard({ editApplicationId }: SpotlightWizardProps) {
   const router = useRouter()
   const { user, student, isLoading: authLoading } = useAuth()
   const [currentStep, setCurrentStep] = useState(0)
@@ -50,6 +95,11 @@ export function SpotlightWizard() {
   const [isSaving, setIsSaving] = useState(false)
   const [spotlightId, setSpotlightId] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [isLoadingEdit, setIsLoadingEdit] = useState(!!editApplicationId)
+  const [editDbId, setEditDbId] = useState<string | null>(null)
+  const [existingDocuments, setExistingDocuments] = useState<{document_type: string, file_name: string}[]>([])
+
+  const isEditMode = !!editApplicationId
 
   const methods = useForm({
     mode: "onChange",
@@ -113,8 +163,53 @@ export function SpotlightWizard() {
 
   const { trigger, getValues, reset, setValue } = methods
 
-  // Pre-fill form with student profile data
+  // Fetch existing application data in edit mode
   useEffect(() => {
+    if (!editApplicationId) return
+
+    async function fetchEditData() {
+      setIsLoadingEdit(true)
+      try {
+        const res = await fetch(`/api/student/spotlight/${editApplicationId}`)
+        if (!res.ok) {
+          setSubmitError('Failed to load application for editing')
+          setIsLoadingEdit(false)
+          return
+        }
+
+        const data = await res.json()
+
+        // Store the DB id and documents
+        setEditDbId(data.id)
+        if (data.spotlight_documents) {
+          setExistingDocuments(data.spotlight_documents.map((d: { document_type: string; file_name: string }) => ({
+            document_type: d.document_type,
+            file_name: d.file_name,
+          })))
+        }
+
+        // Map DB fields to form fields
+        const formData: Record<string, unknown> = {}
+        for (const [dbKey, formKey] of Object.entries(DB_TO_FORM_MAP)) {
+          if (data[dbKey] !== null && data[dbKey] !== undefined) {
+            formData[formKey] = data[dbKey]
+          }
+        }
+
+        reset((prev) => ({ ...prev, ...formData }))
+      } catch {
+        setSubmitError('Failed to load application for editing')
+      } finally {
+        setIsLoadingEdit(false)
+      }
+    }
+
+    fetchEditData()
+  }, [editApplicationId, reset])
+
+  // Pre-fill form with student profile data (skip in edit mode)
+  useEffect(() => {
+    if (isEditMode) return
     if (student) {
       if (student.full_name) setValue("fullName", student.full_name)
       if (student.email) setValue("email", student.email)
@@ -129,10 +224,11 @@ export function SpotlightWizard() {
       if (student.district) setValue("district", student.district)
       if (student.pincode) setValue("pincode", student.pincode)
     }
-  }, [student, setValue])
+  }, [student, setValue, isEditMode])
 
-  // Load draft from localStorage
+  // Load draft from localStorage (skip in edit mode)
   useEffect(() => {
+    if (isEditMode) return
     const savedDraft = localStorage.getItem(STORAGE_KEY)
 
     if (savedDraft) {
@@ -151,10 +247,11 @@ export function SpotlightWizard() {
         console.error("Failed to restore draft:", e)
       }
     }
-  }, [reset, methods])
+  }, [reset, methods, isEditMode])
 
-  // Save draft to localStorage
+  // Save draft to localStorage (skip in edit mode)
   const saveDraft = useCallback(() => {
+    if (isEditMode) return
     setIsSaving(true)
     const data = getValues()
 
@@ -178,7 +275,7 @@ export function SpotlightWizard() {
     )
 
     setTimeout(() => setIsSaving(false), 500)
-  }, [currentStep, getValues])
+  }, [currentStep, getValues, isEditMode])
 
   // Auto-save on step change
   useEffect(() => {
@@ -264,19 +361,36 @@ export function SpotlightWizard() {
     try {
       const data = getValues()
 
-      // Check for required files before submission
-      if (!data.photo) {
-        throw new Error("Photo is required. Please go back to the Documents step and upload your photo.")
-      }
-      if (!data.marksheet) {
-        throw new Error("Marksheet is required. Please go back to the Documents step and upload your marksheet.")
-      }
-      if (!data.aadhar) {
-        throw new Error("Aadhar card is required. Please go back to the Documents step and upload your Aadhar.")
+      // Check for required files before submission (skip in edit mode if existing docs cover them)
+      if (!isEditMode) {
+        if (!data.photo) {
+          throw new Error("Photo is required. Please go back to the Documents step and upload your photo.")
+        }
+        if (!data.marksheet) {
+          throw new Error("Marksheet is required. Please go back to the Documents step and upload your marksheet.")
+        }
+        if (!data.aadhar) {
+          throw new Error("Aadhar card is required. Please go back to the Documents step and upload your Aadhar.")
+        }
+      } else {
+        // In edit mode, only require files if they don't already exist
+        const hasExistingPhoto = existingDocuments.some(d => d.document_type === 'photo')
+        const hasExistingMarksheet = existingDocuments.some(d => d.document_type === 'marksheet')
+        const hasExistingAadhar = existingDocuments.some(d => d.document_type === 'aadhar')
+
+        if (!data.photo && !hasExistingPhoto) {
+          throw new Error("Photo is required. Please go back and upload your photo.")
+        }
+        if (!data.marksheet && !hasExistingMarksheet) {
+          throw new Error("Marksheet is required. Please go back and upload your marksheet.")
+        }
+        if (!data.aadhar && !hasExistingAadhar) {
+          throw new Error("Aadhar card is required. Please go back and upload your Aadhar.")
+        }
       }
 
       // Prepare application data
-      const applicationData = {
+      const applicationData: Record<string, unknown> = {
         full_name: data.fullName,
         date_of_birth: data.dateOfBirth,
         gender: data.gender || null,
@@ -325,67 +439,84 @@ export function SpotlightWizard() {
         annual_financial_need: data.annualFinancialNeed,
       }
 
-      let applicationId: string
+      let appId: string
       let applicationSpotlightId: string
 
-      // Submit application (or get existing one)
-      const response = await fetch("/api/student/spotlight", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(applicationData),
-      })
+      if (isEditMode && editDbId) {
+        // PATCH existing application
+        const response = await fetch(`/api/student/spotlight/${editDbId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(applicationData),
+        })
 
-      if (!response.ok) {
-        const errorData = await response.json()
-
-        // If application already exists, fetch it and use for document uploads
-        if (response.status === 409 && errorData.existingApplicationId) {
-          // Fetch the existing application to get the ID
-          const existingResponse = await fetch("/api/student/spotlight")
-          if (!existingResponse.ok) {
-            throw new Error("Failed to fetch existing application")
-          }
-          const existingApps = await existingResponse.json()
-          const existingApp = existingApps.find(
-            (app: { spotlight_id: string }) => app.spotlight_id === errorData.existingApplicationId
-          )
-          if (!existingApp) {
-            throw new Error("Could not find existing application")
-          }
-          applicationId = existingApp.id
-          applicationSpotlightId = existingApp.spotlight_id
-        } else {
-          throw new Error(errorData.error || "Failed to submit application")
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(errorData.error || "Failed to update application")
         }
-      } else {
+
         const application = await response.json()
-        applicationId = application.id
+        appId = application.id
         applicationSpotlightId = application.spotlight_id
+      } else {
+        // Submit new application (or get existing one)
+        const response = await fetch("/api/student/spotlight", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(applicationData),
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json()
+
+          // If application already exists, fetch it and use for document uploads
+          if (response.status === 409 && errorData.existingApplicationId) {
+            const existingResponse = await fetch("/api/student/spotlight")
+            if (!existingResponse.ok) {
+              throw new Error("Failed to fetch existing application")
+            }
+            const existingApps = await existingResponse.json()
+            const existingApp = existingApps.find(
+              (app: { spotlight_id: string }) => app.spotlight_id === errorData.existingApplicationId
+            )
+            if (!existingApp) {
+              throw new Error("Could not find existing application")
+            }
+            appId = existingApp.id
+            applicationSpotlightId = existingApp.spotlight_id
+          } else {
+            throw new Error(errorData.error || "Failed to submit application")
+          }
+        } else {
+          const application = await response.json()
+          appId = application.id
+          applicationSpotlightId = application.spotlight_id
+        }
       }
 
       setSpotlightId(applicationSpotlightId)
 
-      // Upload documents
+      // Upload documents (only new files where user selected them)
       const documentUploads: Promise<unknown>[] = []
 
-      // Photo (required)
+      // Photo
       if (data.photo) {
         documentUploads.push(
-          uploadDocument(applicationId, data.photo as File, "photo")
+          uploadDocument(appId, data.photo as File, "photo")
         )
       }
 
-      // Marksheet (required)
+      // Marksheet
       if (data.marksheet) {
         documentUploads.push(
-          uploadDocument(applicationId, data.marksheet as File, "marksheet")
+          uploadDocument(appId, data.marksheet as File, "marksheet")
         )
       }
 
-      // Aadhar (required)
+      // Aadhar
       if (data.aadhar) {
         documentUploads.push(
-          uploadDocument(applicationId, data.aadhar as File, "aadhar")
+          uploadDocument(appId, data.aadhar as File, "aadhar")
         )
       }
 
@@ -393,7 +524,7 @@ export function SpotlightWizard() {
       if (data.incomeCertificate) {
         documentUploads.push(
           uploadDocument(
-            applicationId,
+            appId,
             data.incomeCertificate as File,
             "income_certificate"
           )
@@ -403,8 +534,10 @@ export function SpotlightWizard() {
       // Wait for all uploads
       await Promise.all(documentUploads)
 
-      // Clear draft from localStorage
-      localStorage.removeItem(STORAGE_KEY)
+      // Clear draft from localStorage (only for new applications)
+      if (!isEditMode) {
+        localStorage.removeItem(STORAGE_KEY)
+      }
 
       setIsSubmitted(true)
     } catch (error) {
@@ -420,7 +553,7 @@ export function SpotlightWizard() {
   }
 
   // Auth loading state
-  if (authLoading) {
+  if (authLoading || isLoadingEdit) {
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -475,11 +608,12 @@ export function SpotlightWizard() {
             transition={{ delay: 0.3 }}
           >
             <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-3">
-              Application Submitted!
+              {isEditMode ? "Application Resubmitted!" : "Application Submitted!"}
             </h2>
             <p className="text-gray-600 mb-8 max-w-sm mx-auto">
-              Thank you for applying for the Spotlight program. Our team will review your
-              application and get back to you soon.
+              {isEditMode
+                ? "Your updated application has been resubmitted for review."
+                : "Thank you for applying for the Spotlight program. Our team will review your application and get back to you soon."}
             </p>
           </motion.div>
 
@@ -504,12 +638,23 @@ export function SpotlightWizard() {
             transition={{ delay: 0.5 }}
             className="flex flex-col sm:flex-row gap-3 justify-center"
           >
-            <Button
-              onClick={() => router.push("/dashboard")}
-              className="bg-primary hover:bg-primary/90 text-white px-8 py-6 rounded-xl text-base font-semibold shadow-lg shadow-primary/25 transition-all hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5"
-            >
-              View My Applications
-            </Button>
+            {isEditMode && editDbId ? (
+              <Button
+                asChild
+                className="bg-primary hover:bg-primary/90 text-white px-8 py-6 rounded-xl text-base font-semibold shadow-lg shadow-primary/25 transition-all hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5"
+              >
+                <Link href={`/dashboard/spotlight/${editDbId}`}>
+                  View Application
+                </Link>
+              </Button>
+            ) : (
+              <Button
+                onClick={() => router.push("/dashboard")}
+                className="bg-primary hover:bg-primary/90 text-white px-8 py-6 rounded-xl text-base font-semibold shadow-lg shadow-primary/25 transition-all hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5"
+              >
+                View My Applications
+              </Button>
+            )}
             <Button
               onClick={() => router.push("/")}
               variant="outline"
@@ -551,7 +696,12 @@ export function SpotlightWizard() {
                 {currentStep === 3 && <FamilyBackgroundStep />}
                 {currentStep === 4 && <CircumstancesStep />}
                 {currentStep === 5 && <StoryGoalsStep />}
-                {currentStep === 6 && <DocumentsStep />}
+                {currentStep === 6 && (
+                  <DocumentsStep
+                    editMode={isEditMode}
+                    existingDocuments={existingDocuments}
+                  />
+                )}
                 {currentStep === 7 && <ReviewStep onEdit={goToStep} />}
               </motion.div>
             </AnimatePresence>
@@ -613,12 +763,12 @@ export function SpotlightWizard() {
                 {isSubmitting ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    Submitting...
+                    {isEditMode ? "Resubmitting..." : "Submitting..."}
                   </>
                 ) : (
                   <>
                     <Sparkles className="w-4 h-4" />
-                    Submit
+                    {isEditMode ? "Resubmit" : "Submit"}
                   </>
                 )}
               </Button>
