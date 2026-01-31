@@ -73,6 +73,9 @@ Educational scholarship platform connecting donors with meritorious students fro
 │   │               ├── DocumentsStep.tsx
 │   │               └── ReviewStep.tsx
 │   │
+│   ├── students/                     # Featured students (public)
+│   │   └── page.tsx                  # Full featured students grid
+│   │
 │   ├── donate/                       # Donation flow (public, no auth)
 │   │   ├── page.tsx                  # Amount selection + donor info
 │   │   └── wire-transfer/page.tsx    # Bank transfer details display
@@ -101,6 +104,7 @@ Educational scholarship platform connecting donors with meritorious students fro
 │   │   └── activity-log/page.tsx     # Admin audit trail
 │   │
 │   ├── api/                          # Backend API routes
+│   │   ├── featured-students/route.ts # GET: public featured students with signed URLs
 │   │   ├── donations/route.ts        # POST: create donation (public)
 │   │   ├── help-interest/route.ts    # GET/POST: help interests (public)
 │   │   ├── upload/
@@ -142,7 +146,9 @@ Educational scholarship platform connecting donors with meritorious students fro
 │       ├── HeroSlider.tsx            # 4-slide auto-rotating carousel
 │       ├── ImpactStatsSection.tsx    # Key metrics
 │       ├── WelcomeSection.tsx        # Value proposition
-│       ├── StudentSpotlightSection.tsx # Featured students carousel
+│       ├── StudentSpotlightSection.tsx # Featured students section (data-driven with fallback)
+│       ├── StudentCard.tsx            # Shared student card component
+│       ├── HelpInterestDialog.tsx     # Shared help interest dialog
 │       ├── EmpoweringSection.tsx     # Mission statement
 │       ├── GoalsSection.tsx          # Organization goals
 │       ├── HowWeWorkSection.tsx      # Step-by-step process
@@ -384,6 +390,7 @@ if (!isAdmin) return 403
 | `/donate` | `app/donate/page.tsx` | Donation amount + donor form |
 | `/donate/wire-transfer` | `app/donate/wire-transfer/page.tsx` | Bank transfer details |
 | `/spotlight` | `app/spotlight/page.tsx` | Spotlight program info |
+| `/students` | `app/students/page.tsx` | All featured students grid |
 
 ### Student Routes (auth required)
 
@@ -411,11 +418,12 @@ if (!isAdmin) return 403
 | `/admin/help-interests` | `app/admin/help-interests/page.tsx` | Track help interest leads |
 | `/admin/activity-log` | `app/admin/activity-log/page.tsx` | Admin audit trail |
 
-### API Routes (21 total)
+### API Routes (22 total)
 
 **Public:**
 | Method | Route | Purpose |
 |--------|-------|---------|
+| GET | `/api/featured-students` | Fetch featured students with signed photo URLs (supports `?limit=N`) |
 | POST | `/api/donations` | Create donation record |
 | GET/POST | `/api/help-interest` | Submit help interest |
 | POST | `/api/upload` | Upload scholarship documents |
@@ -692,18 +700,17 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 | Phase D | Spotlight application: 9-step wizard, student dashboard integration, blank screen fix |
 | Phase D.1 | Unified data fetching: migrated all pages to API routes, fixed student photo upload, removed browser client from all pages |
 | Phase D.2 | Auth idle fix + unified dashboards: fixed SIGNED_IN loading flash on idle/tab reactivation, unified scholarship + spotlight counts in student dashboard stats and admin stats, unified "My Applications" list with type/status filters |
+| Phase E | Homepage featured students: public API (`/api/featured-students`) fetches from both spotlight & scholarship tables with signed photo URLs + derived achievements; extracted `StudentCard` + `HelpInterestDialog` shared components; data-driven `StudentSpotlightSection` with fallback placeholders + loading skeletons; new `/students` page with full grid + empty state |
 
 ### Not Started
 
 | Phase | Description |
 |-------|-------------|
-| Phase E | Homepage integration: fetch real featured students from DB for StudentSpotlightSection |
 | Phase F | Email notifications: wire Resend into status change workflows using email_templates/email_logs tables |
 
 ### Known Gaps
 
 - Email system has DB infrastructure (templates + logs tables) but no send logic
-- StudentSpotlightSection on homepage may use placeholder data instead of real featured students
 - Supabase MCP tool is linked to project `gpwtnzeawexqabilvbey` (ravila), not the app's project `ukjlfvupcajxnqyoinso` — needs token update for MCP DB access
 
 ---
@@ -712,12 +719,12 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 
 | Metric | Count |
 |--------|-------|
-| TypeScript/TSX files | ~153 |
-| Pages (page.tsx) | 22 |
-| API routes (route.ts) | 21 |
+| TypeScript/TSX files | ~157 |
+| Pages (page.tsx) | 23 |
+| API routes (route.ts) | 22 |
 | Layouts (layout.tsx) | 4 |
 | UI components (shadcn) | 59 |
-| Feature components | 18 |
+| Feature components | 20 |
 | Form step components | 14 |
 | Zod schemas | 22+ |
 | Database tables | 10 |

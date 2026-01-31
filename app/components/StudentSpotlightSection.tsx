@@ -1,52 +1,19 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { motion } from "motion/react"
-import Image from "next/image"
 import Link from "next/link"
-import { useForm } from "react-hook-form"
-import { zodResolver } from "@hookform/resolvers/zod"
-import { GraduationCap, ArrowRight, MapPin, BookOpen, Award, BadgeCheck, Send, Loader2 } from "lucide-react"
+import { ArrowRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { Label } from "@/components/ui/label"
-import { AnimatedInput } from "@/app/components/AnimatedInput"
-import { helpInterestSchema, type HelpInterest, helpTypes } from "@/lib/schemas/application"
+import StudentCard, { type Student } from "./StudentCard"
+import HelpInterestDialog from "./HelpInterestDialog"
 
-interface Student {
-  id: string
-  name: string
-  image: string
-  field: string
-  year: string
-  location: string
-  dream: string
-  background: string
-  achievement: string
-  annualNeed: number
-  gender: "male" | "female"
-}
-
-const students: Student[] = [
+const FALLBACK_STUDENTS: Student[] = [
   {
-    id: "1",
+    id: "fallback-1",
     name: "Priya Sharma",
     image: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80",
     field: "Computer Science",
-    year: "2nd Year B.Tech",
     location: "Warangal, Telangana",
     dream: "Build healthcare tech solutions for rural India",
     background: "First in her family to attend college.",
@@ -55,11 +22,10 @@ const students: Student[] = [
     gender: "female",
   },
   {
-    id: "2",
+    id: "fallback-2",
     name: "Arjun Reddy",
     image: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80",
     field: "Medicine",
-    year: "1st Year MBBS",
     location: "Vizag, Andhra Pradesh",
     dream: "Become a doctor and serve his village community",
     background: "Lost his father at 15. Raised by his mother.",
@@ -68,11 +34,10 @@ const students: Student[] = [
     gender: "male",
   },
   {
-    id: "3",
+    id: "fallback-3",
     name: "Lakshmi Devi",
     image: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80",
     field: "Mechanical Engineering",
-    year: "3rd Year B.Tech",
     location: "Karimnagar, Telangana",
     dream: "Design sustainable energy solutions for India",
     background: "From a farming family hit by crop failures.",
@@ -82,328 +47,66 @@ const students: Student[] = [
   },
 ]
 
-const helpTypeLabels: Record<string, string> = {
-  donate: "I want to donate",
-  volunteer: "I want to volunteer",
-  corporate: "Corporate partnership",
-  other: "Other",
-}
-
-function HelpInterestDialog({
-  student,
-  open,
-  onOpenChange
-}: {
-  student: Student | null
-  open: boolean
-  onOpenChange: (open: boolean) => void
-}) {
-  const [isSubmitted, setIsSubmitted] = useState(false)
-
-  const form = useForm<HelpInterest>({
-    resolver: zodResolver(helpInterestSchema),
-    defaultValues: {
-      name: "",
-      email: "",
-      phone: "",
-      helpType: undefined,
-      message: "",
-    },
-  })
-
-  const { isSubmitting } = form.formState
-
-  const onSubmit = async (data: HelpInterest) => {
-    try {
-      const response = await fetch('/api/help-interest', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: data.name,
-          email: data.email,
-          phone: data.phone,
-          help_type: data.helpType,
-          message: data.message || null,
-          student_id: student?.id,
-          student_name: student?.name,
-        }),
-      })
-
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Failed to submit')
-      }
-
-      setIsSubmitted(true)
-    } catch (error) {
-      console.error('Help interest submission error:', error)
-      form.setError('root', {
-        message: error instanceof Error ? error.message : 'Something went wrong. Please try again.',
-      })
-    }
-  }
-
-  const handleClose = () => {
-    form.reset()
-    setIsSubmitted(false)
-    onOpenChange(false)
-  }
-
-  if (!student) return null
-
+function StudentCardSkeleton() {
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-md p-0 overflow-hidden gap-0">
-        {/* Custom Header with Gradient */}
-        <div className="bg-gradient-to-r from-primary to-orange-500 p-5 text-white">
-          <DialogHeader className="space-y-1">
-            <DialogDescription className="text-orange-100 text-sm">
-              Express interest to support
-            </DialogDescription>
-            <DialogTitle className="text-xl font-bold text-white">
-              {student.name}
-            </DialogTitle>
-            <p className="text-orange-100 text-sm">{student.field} • {student.year}</p>
-          </DialogHeader>
+    <div className="bg-white rounded-2xl overflow-hidden shadow-lg shadow-gray-200/50 border border-gray-100 animate-pulse">
+      <div className="h-52 bg-gray-200" />
+      <div className="p-5 space-y-3">
+        <div className="flex gap-2">
+          <div className="h-6 w-24 bg-gray-200 rounded-full" />
+          <div className="h-6 w-20 bg-gray-200 rounded-full" />
         </div>
-
-        {/* Body */}
-        <div className="p-6">
-          {!isSubmitted ? (
-            <>
-              <p className="text-gray-600 text-sm mb-5">
-                Share your details and our team will connect with you to discuss how you can support {student.name.split(' ')[0]}'s education journey.
-              </p>
-
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                {/* Name Field */}
-                <div>
-                  <AnimatedInput
-                    type="text"
-                    label="Your Name"
-                    value={form.watch("name")}
-                    onChange={(e) => form.setValue("name", e.target.value, { shouldValidate: true })}
-                  />
-                  {form.formState.errors.name && (
-                    <p className="text-red-500 text-sm mt-1">{form.formState.errors.name.message}</p>
-                  )}
-                </div>
-
-                {/* Email Field */}
-                <div>
-                  <AnimatedInput
-                    type="email"
-                    label="Email Address"
-                    value={form.watch("email")}
-                    onChange={(e) => form.setValue("email", e.target.value, { shouldValidate: true })}
-                  />
-                  {form.formState.errors.email && (
-                    <p className="text-red-500 text-sm mt-1">{form.formState.errors.email.message}</p>
-                  )}
-                </div>
-
-                {/* Phone Field */}
-                <div>
-                  <AnimatedInput
-                    type="tel"
-                    label="Phone Number"
-                    value={form.watch("phone")}
-                    onChange={(e) => form.setValue("phone", e.target.value, { shouldValidate: true })}
-                  />
-                  {form.formState.errors.phone && (
-                    <p className="text-red-500 text-sm mt-1">{form.formState.errors.phone.message}</p>
-                  )}
-                </div>
-
-                {/* Help Type Dropdown */}
-                <div>
-                  <Label className="text-sm text-gray-600 mb-2 block">How would you like to help?</Label>
-                  <Select
-                    onValueChange={(value) => form.setValue("helpType", value as any, { shouldValidate: true })}
-                    value={form.watch("helpType")}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select an option" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {helpTypes.map((type) => (
-                        <SelectItem key={type} value={type}>
-                          {helpTypeLabels[type]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {form.formState.errors.helpType && (
-                    <p className="text-red-500 text-sm mt-1">{form.formState.errors.helpType.message}</p>
-                  )}
-                </div>
-
-                {form.formState.errors.root && (
-                  <p className="text-red-500 text-sm text-center bg-red-50 p-3 rounded-lg">
-                    {form.formState.errors.root.message}
-                  </p>
-                )}
-
-                <Button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="w-full mt-6 text-lg py-6 bg-primary hover:bg-primary/90 transition-all duration-300 transform hover:scale-105 hover:shadow-lg active:scale-95 donate-button"
-                >
-                  {isSubmitting ? (
-                    <span className="flex items-center gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Submitting...
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-2">
-                      <Send className="w-4 h-4" />
-                      Submit Interest
-                    </span>
-                  )}
-                </Button>
-              </form>
-            </>
-          ) : (
-            <motion.div
-              className="text-center py-6"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-            >
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <BadgeCheck className="w-8 h-8 text-green-600" />
-              </div>
-              <h4 className="text-xl font-bold text-gray-900 mb-2">Thank You!</h4>
-              <p className="text-gray-600 text-sm">
-                We've received your interest in supporting {student.name.split(' ')[0]}.
-                Our team will reach out within 24-48 hours.
-              </p>
-              <Button
-                onClick={handleClose}
-                variant="outline"
-                className="mt-6 rounded-full"
-              >
-                Close
-              </Button>
-            </motion.div>
-          )}
+        <div className="space-y-2">
+          <div className="h-3 w-16 bg-gray-200 rounded" />
+          <div className="h-4 w-full bg-gray-200 rounded" />
         </div>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-function StudentCard({
-  student,
-  index,
-  onExpressInterest
-}: {
-  student: Student
-  index: number
-  onExpressInterest: (student: Student) => void
-}) {
-  return (
-    <motion.div
-      className="group"
-      initial={{ opacity: 0, y: 30 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, delay: index * 0.15 }}
-      viewport={{ once: true }}
-    >
-      <div className="bg-white rounded-2xl overflow-hidden shadow-lg shadow-gray-200/50 border border-gray-100 hover:shadow-xl hover:shadow-primary/10 transition-all duration-300 hover:-translate-y-1">
-        {/* Image Section */}
-        <div className="relative h-52 overflow-hidden">
-          <Image
-            src={student.image}
-            alt={student.name}
-            fill
-            className="object-cover group-hover:scale-105 transition-transform duration-500"
-          />
-          {/* Gradient overlay */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-
-          {/* Verified badge */}
-          <div className="absolute top-3 right-3">
-            <span className="inline-flex items-center gap-1 bg-green-500 text-white text-xs font-medium px-2.5 py-1 rounded-full">
-              <BadgeCheck className="w-3 h-3" />
-              Verified
-            </span>
-          </div>
-
-          {/* Name & details overlay */}
-          <div className="absolute bottom-3 left-3 right-3">
-            <h3 className="text-xl font-bold text-white mb-1">{student.name}</h3>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-white/80 text-sm">
-              <span className="flex items-center gap-1">
-                <GraduationCap className="w-3.5 h-3.5" />
-                {student.field}
-              </span>
-              <span className="flex items-center gap-1">
-                <MapPin className="w-3.5 h-3.5" />
-                {student.location}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Content Section */}
-        <div className="p-5">
-          {/* Year badge */}
-          <div className="flex items-center gap-2 mb-3">
-            <span className="inline-flex items-center gap-1 bg-orange-50 text-primary text-xs font-semibold px-3 py-1 rounded-full">
-              <BookOpen className="w-3 h-3" />
-              {student.year}
-            </span>
-            <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-600 text-xs font-semibold px-3 py-1 rounded-full">
-              <Award className="w-3 h-3" />
-              {student.achievement}
-            </span>
-          </div>
-
-          {/* Dream */}
-          <div className="mb-3">
-            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">
-              {student.gender === "male" ? "His Dream" : "Her Dream"}
-            </p>
-            <p className="text-gray-800 font-medium text-sm leading-relaxed">
-              "{student.dream}"
-            </p>
-          </div>
-
-          {/* Background */}
-          <p className="text-gray-500 text-sm mb-4 min-h-[40px]">
-            {student.background}
-          </p>
-
-          {/* Funding need */}
-          <div className="bg-orange-50/50 rounded-xl p-3 mb-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">Annual Support Needed</span>
-              <span className="text-lg font-bold text-primary">₹{student.annualNeed.toLocaleString('en-IN')}</span>
-            </div>
-          </div>
-
-          {/* CTA */}
-          <Button
-            onClick={() => onExpressInterest(student)}
-            className="w-full bg-primary hover:bg-primary/90 text-white rounded-full font-semibold group/btn"
-          >
-            I Want to Help
-            <ArrowRight className="w-4 h-4 ml-2 group-hover/btn:translate-x-1 transition-transform" />
-          </Button>
-        </div>
+        <div className="h-4 w-3/4 bg-gray-200 rounded" />
+        <div className="h-12 bg-gray-100 rounded-xl" />
+        <div className="h-10 bg-gray-200 rounded-full" />
       </div>
-    </motion.div>
+    </div>
   )
 }
 
 export default function StudentSpotlightSection() {
+  const [students, setStudents] = useState<Student[]>([])
+  const [totalCount, setTotalCount] = useState<number | null>(null)
+  const [loading, setLoading] = useState(true)
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
+
+  useEffect(() => {
+    async function fetchFeatured() {
+      try {
+        const response = await fetch('/api/featured-students?limit=3')
+        if (response.ok) {
+          const data = await response.json()
+          if (data.students && data.students.length > 0) {
+            setStudents(data.students)
+            setTotalCount(data.total)
+          } else {
+            setStudents(FALLBACK_STUDENTS)
+          }
+        } else {
+          setStudents(FALLBACK_STUDENTS)
+        }
+      } catch {
+        setStudents(FALLBACK_STUDENTS)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchFeatured()
+  }, [])
 
   const handleExpressInterest = (student: Student) => {
     setSelectedStudent(student)
     setIsModalOpen(true)
   }
+
+  const countText = totalCount && totalCount > 0
+    ? `${totalCount}+ verified students seeking support`
+    : "Verified students seeking support"
 
   return (
     <>
@@ -433,17 +136,28 @@ export default function StudentSpotlightSection() {
             </p>
           </motion.div>
 
+          {/* Loading Skeletons */}
+          {loading && (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
+              <StudentCardSkeleton />
+              <StudentCardSkeleton />
+              <StudentCardSkeleton />
+            </div>
+          )}
+
           {/* Students Grid */}
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
-            {students.map((student, index) => (
-              <StudentCard
-                key={student.id}
-                student={student}
-                index={index}
-                onExpressInterest={handleExpressInterest}
-              />
-            ))}
-          </div>
+          {!loading && (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
+              {students.map((student, index) => (
+                <StudentCard
+                  key={student.id}
+                  student={student}
+                  index={index}
+                  onExpressInterest={handleExpressInterest}
+                />
+              ))}
+            </div>
+          )}
 
           {/* View All CTA */}
           <motion.div
@@ -464,7 +178,7 @@ export default function StudentSpotlightSection() {
               </Button>
             </Link>
             <p className="text-sm text-gray-500 mt-3">
-              25+ verified students seeking support
+              {countText}
             </p>
           </motion.div>
         </div>
