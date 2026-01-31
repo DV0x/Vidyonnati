@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState, useMemo, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { User, Session } from '@supabase/supabase-js'
 import type { Student } from '@/types/database'
@@ -24,24 +24,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
 
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
+  const initializedRef = useRef(false)
 
   // Check if user is admin
   const checkIsAdmin = async (): Promise<boolean> => {
-    const { data } = await supabase.rpc('is_admin')
-    return !!data
+    try {
+      const { data, error } = await supabase.rpc('is_admin')
+      if (error) {
+        console.error('Admin check failed:', error.message)
+        return false
+      }
+      return !!data
+    } catch {
+      return false
+    }
   }
 
   // Fetch student profile (only for non-admin users)
   const fetchStudent = async (userId: string) => {
-    const { data, error } = await supabase
-      .from('students')
-      .select('*')
-      .eq('id', userId)
-      .single()
+    try {
+      const { data, error } = await supabase
+        .from('students')
+        .select('*')
+        .eq('id', userId)
+        .single()
 
-    if (!error && data) {
-      setStudent(data)
+      if (!error && data) {
+        setStudent(data)
+      }
+    } catch (err) {
+      console.error('Failed to fetch student profile:', err)
     }
   }
 
@@ -50,7 +63,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const adminStatus = await checkIsAdmin()
     setIsAdmin(adminStatus)
 
-    // Only fetch student profile if user is not an admin
     if (!adminStatus) {
       await fetchStudent(userId)
     }
@@ -63,7 +75,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const signOut = async () => {
-    // Use global scope to sign out from all sessions and clear OAuth provider sessions
     await supabase.auth.signOut({ scope: 'global' })
     setUser(null)
     setSession(null)
@@ -72,45 +83,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   useEffect(() => {
-    // Get initial session
-    const getInitialSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      setSession(session)
-      setUser(session?.user ?? null)
-
-      if (session?.user) {
-        await fetchUserData(session.user.id)
-      }
-
-      setIsLoading(false)
-    }
-
-    getInitialSession()
-
-    // Listen for auth changes
+    // onAuthStateChange is the single source of truth.
+    // INITIAL_SESSION fires synchronously on subscribe with the current
+    // session from cookies (which the proxy already refreshed server-side).
+    // No separate getUser()/getSession() call needed.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        // Only set loading for actual sign-in events, not token refresh
-        // Token refresh happens silently in the background and shouldn't disrupt UI
-        if (event === 'SIGNED_IN') {
-          setIsLoading(true)
-        }
+        if (event === 'INITIAL_SESSION') {
+          // First event on subscribe — session comes from cookies.
+          // The proxy already validated/refreshed the token server-side,
+          // so this session is trustworthy.
+          setSession(session)
+          setUser(session?.user ?? null)
 
-        setSession(session)
-        setUser(session?.user ?? null)
-
-        if (session?.user) {
-          // Only fetch user data on sign-in, not on token refresh
-          // Token refresh doesn't change user data
-          if (event === 'SIGNED_IN') {
+          if (session?.user) {
             await fetchUserData(session.user.id)
           }
-        } else {
+
+          setIsLoading(false)
+          initializedRef.current = true
+        } else if (event === 'SIGNED_IN') {
+          // Actual sign-in action (login form, OAuth callback).
+          // Skip if this fires during initialization (some Supabase versions
+          // fire SIGNED_IN after INITIAL_SESSION for existing sessions).
+          if (!initializedRef.current) {
+            initializedRef.current = true
+          }
+
+          setIsLoading(true)
+          setSession(session)
+          setUser(session?.user ?? null)
+
+          if (session?.user) {
+            await fetchUserData(session.user.id)
+          }
+
+          setIsLoading(false)
+        } else if (event === 'TOKEN_REFRESHED') {
+          // Silent token refresh — update session/user, no data re-fetch
+          setSession(session)
+          setUser(session?.user ?? null)
+        } else if (event === 'SIGNED_OUT') {
+          // Explicit sign-out or token refresh failure
+          setUser(null)
+          setSession(null)
           setStudent(null)
           setIsAdmin(false)
-        }
-
-        if (event === 'SIGNED_IN') {
           setIsLoading(false)
         }
       }
@@ -119,7 +137,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       subscription.unsubscribe()
     }
-  }, [])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [supabase])
 
   return (
     <AuthContext.Provider

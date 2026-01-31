@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { motion } from 'motion/react'
 import { useAuth } from '@/app/context/AuthContext'
-import { createClient } from '@/lib/supabase/client'
 import type { AdminActivityLog } from '@/types/database'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -28,7 +27,7 @@ interface Stats {
 }
 
 interface ActivityLogWithAdmin extends AdminActivityLog {
-  admin_name?: string
+  admin?: { name: string; email: string }
 }
 
 export default function AdminDashboardPage() {
@@ -36,60 +35,34 @@ export default function AdminDashboardPage() {
   const [stats, setStats] = useState<Stats | null>(null)
   const [activities, setActivities] = useState<ActivityLogWithAdmin[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [adminName, setAdminName] = useState<string>('')
 
   useEffect(() => {
     async function fetchData() {
-      if (!user) return
+      try {
+        // Fetch stats and activity log in parallel via API routes.
+        // API routes use the server-side Supabase client with cookies,
+        // avoiding the browser client auth timing issue that caused
+        // data to only load after a hard refresh.
+        const [statsRes, activityRes] = await Promise.all([
+          fetch('/api/admin/stats'),
+          fetch('/api/admin/activity-log?pageSize=10'),
+        ])
 
-      const supabase = createClient()
+        if (statsRes.ok) {
+          setStats(await statsRes.json())
+        }
 
-      // Fetch admin name
-      const { data: admin } = await supabase
-        .from('admins')
-        .select('name')
-        .eq('id', user.id)
-        .single()
-
-      if (admin?.name) {
-        setAdminName(admin.name)
+        if (activityRes.ok) {
+          const data = await activityRes.json()
+          setActivities(data.activities || [])
+        }
+      } finally {
+        setIsLoading(false)
       }
-
-      // Fetch stats from API
-      const statsRes = await fetch('/api/admin/stats')
-      if (statsRes.ok) {
-        const statsData = await statsRes.json()
-        setStats(statsData)
-      }
-
-      // Fetch recent activity log
-      const { data: activityData } = await supabase
-        .from('admin_activity_log')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(10)
-
-      if (activityData) {
-        // Fetch admin names for activities
-        const adminIds = [...new Set(activityData.map(a => a.admin_user_id))]
-        const { data: admins } = await supabase
-          .from('admins')
-          .select('id, name')
-          .in('id', adminIds)
-
-        const adminMap = new Map(admins?.map(a => [a.id, a.name]) || [])
-
-        setActivities(activityData.map(activity => ({
-          ...activity,
-          admin_name: adminMap.get(activity.admin_user_id) || 'Unknown Admin',
-        })))
-      }
-
-      setIsLoading(false)
     }
 
     fetchData()
-  }, [user])
+  }, [])
 
   const today = new Date().toLocaleDateString('en-IN', {
     weekday: 'long',
@@ -98,7 +71,7 @@ export default function AdminDashboardPage() {
     day: 'numeric',
   })
 
-  const displayName = adminName || user?.email?.split('@')[0] || 'Admin'
+  const displayName = user?.email?.split('@')[0] || 'Admin'
 
   return (
     <div className="space-y-6">
@@ -300,7 +273,7 @@ function ActivityCard({
       </div>
       <div className="text-right shrink-0">
         <p className="text-xs text-gray-500">
-          {activity.admin_name}
+          {activity.admin?.name || 'Unknown Admin'}
         </p>
         <p className="text-xs text-gray-400">
           {new Date(activity.created_at!).toLocaleDateString('en-IN', {

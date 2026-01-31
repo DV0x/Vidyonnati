@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { motion } from 'motion/react'
 import { useAuth } from '@/app/context/AuthContext'
-import { createClient } from '@/lib/supabase/client'
 import type { Application, SpotlightApplication } from '@/types/database'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -60,37 +59,30 @@ export default function DashboardPage() {
 
   useEffect(() => {
     async function fetchApplications() {
-      if (!user) return
+      try {
+        // Fetch applications and spotlight apps in parallel via API routes.
+        // API routes use the server-side Supabase client with cookies,
+        // avoiding the browser client auth timing issue that caused
+        // data to only load after a hard refresh.
+        const [appsRes, spotlightRes] = await Promise.all([
+          fetch('/api/student/applications'),
+          fetch('/api/student/spotlight'),
+        ])
 
-      const supabase = createClient()
+        if (appsRes.ok) {
+          setApplications(await appsRes.json())
+        }
 
-      // Fetch scholarship applications
-      const { data: appData, error: appError } = await supabase
-        .from('applications')
-        .select('*')
-        .eq('student_id', user.id)
-        .order('created_at', { ascending: false })
-
-      if (!appError && appData) {
-        setApplications(appData)
+        if (spotlightRes.ok) {
+          setSpotlightApplications(await spotlightRes.json())
+        }
+      } finally {
+        setIsLoading(false)
       }
-
-      // Fetch spotlight applications
-      const { data: spotlightData, error: spotlightError } = await supabase
-        .from('spotlight_applications')
-        .select('*')
-        .eq('student_id', user.id)
-        .order('created_at', { ascending: false })
-
-      if (!spotlightError && spotlightData) {
-        setSpotlightApplications(spotlightData)
-      }
-
-      setIsLoading(false)
     }
 
     fetchApplications()
-  }, [user])
+  }, [])
 
   const displayName = student?.full_name || user?.email?.split('@')[0] || 'Student'
 
