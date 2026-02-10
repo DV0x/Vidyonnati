@@ -21,6 +21,11 @@ export default function MainNavigation() {
   const router = useRouter()
   const { user, student, isLoading, signOut } = useAuth()
 
+  // DEBUG: Track what auth values MainNavigation sees
+  useEffect(() => {
+    console.log(`[AUTH DEBUG] MainNavigation render: isLoading=${isLoading}, hasUser=${!!user}, userName=${student?.full_name || user?.email?.split("@")[0] || 'none'}`)
+  }, [isLoading, user, student])
+
   const handleSignOut = async () => {
     await signOut()
     router.push("/")

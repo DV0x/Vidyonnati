@@ -17,6 +17,8 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+let authProviderMountCount = 0
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [session, setSession] = useState<Session | null>(null)
@@ -26,6 +28,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const supabase = useMemo(() => createClient(), [])
   const initializedRef = useRef(false)
+
+  // DEBUG: Track mount/unmount to diagnose nav issues
+  useEffect(() => {
+    authProviderMountCount++
+    console.log(`[AUTH DEBUG] AuthProvider MOUNTED (count: ${authProviderMountCount})`)
+    return () => {
+      console.log(`[AUTH DEBUG] AuthProvider UNMOUNTED`)
+    }
+  }, [])
 
   // Check if user is admin
   const checkIsAdmin = async (): Promise<boolean> => {
@@ -103,6 +114,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // No separate getUser()/getSession() call needed.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log(`[AUTH DEBUG] onAuthStateChange: event=${event}, hasSession=${!!session}, hasUser=${!!session?.user}, initializedRef=${initializedRef.current}`)
         if (event === 'INITIAL_SESSION') {
           // First event on subscribe — session comes from cookies.
           // The proxy already validated/refreshed the token server-side,
