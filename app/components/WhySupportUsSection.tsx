@@ -221,13 +221,13 @@ export default function WhySupportUsSection() {
             Why <span className="text-primary">Support</span> Vidyonnati?
           </h2>
           <p className="text-gray-600 max-w-2xl mx-auto text-lg">
-            Whether you're an individual donor or a corporate partner, your contribution
-            creates lasting impact with complete transparency.
+            Your contribution creates lasting impact with complete transparency
+            and direct connection to the students you support.
           </p>
         </motion.div>
 
-        {/* Two Partner Types */}
-        <div className="grid md:grid-cols-2 gap-6 md:gap-8 max-w-5xl mx-auto">
+        {/* Partner Types */}
+        <div className="grid gap-6 md:gap-8 max-w-lg mx-auto">
           <PartnerCard
             type="For Individuals"
             icon={Heart}
@@ -239,6 +239,7 @@ export default function WhySupportUsSection() {
             featured={true}
           />
 
+          {/* TODO: Re-enable Corporate Partnership card when ready
           <PartnerCard
             type="For Corporates"
             icon={Building2}
@@ -248,6 +249,7 @@ export default function WhySupportUsSection() {
             ctaText="Partner With Us"
             ctaHref="/contact"
           />
+          */}
         </div>
 
         {/* Trust indicators */}
