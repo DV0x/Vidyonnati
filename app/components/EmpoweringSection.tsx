@@ -24,7 +24,7 @@ export default function EmpoweringSection() {
                 transition={{ duration: 0.8, delay: 0.2 }}
                 viewport={{ once: true }}
               >
-                Empowering <span className="text-primary">Rural India's</span> Future Leaders
+                Empowering <span className="text-primary">Rural Andhra Pradesh's</span> Future Leaders
               </motion.h2>
               <motion.div
                 className="w-20 h-1 bg-primary mx-auto"
@@ -41,8 +41,8 @@ export default function EmpoweringSection() {
               transition={{ duration: 0.8, delay: 0.6 }}
               viewport={{ once: true }}
             >
-              Every brilliant mind deserves a chance to shine. Across rural India, countless talented students dream of
-              higher education but face financial barriers. We're here to bridge that gap.
+              Across rural Andhra Pradesh, talented students in Government High Schools dream of higher education
+              but face financial barriers. Through our Mandal-level screening tests, we identify and support these bright minds.
             </motion.p>
             <motion.div
               className="pt-4"

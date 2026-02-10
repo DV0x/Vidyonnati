@@ -16,32 +16,31 @@ interface StatItem {
 const stats: StatItem[] = [
   {
     icon: GraduationCap,
-    value: 250,
+    value: 45,
     suffix: "+",
-    label: "Students Supported",
-    description: "Bright minds empowered",
-  },
-  {
-    icon: IndianRupee,
-    value: 50,
-    suffix: "L+",
-    prefix: "₹",
-    label: "Scholarships Awarded",
-    description: "Directly to students",
+    label: "Students Benefited",
+    description: "Meritorious scholars supported",
   },
   {
     icon: TrendingUp,
-    value: 95,
-    suffix: "%",
-    label: "Success Rate",
-    description: "Graduate & get placed",
+    value: 927,
+    suffix: "+",
+    label: "Screening Appearances",
+    description: "Students tested across mandals",
   },
   {
     icon: Building2,
-    value: 15,
-    suffix: "+",
-    label: "Partner Institutions",
-    description: "Across Telangana",
+    value: 24,
+    suffix: "",
+    label: "High Schools",
+    description: "Govt & aided schools in AP",
+  },
+  {
+    icon: IndianRupee,
+    value: 3,
+    suffix: "",
+    label: "Mandals Covered",
+    description: "Bapatla District, Andhra Pradesh",
   },
 ]
 
@@ -184,7 +183,7 @@ export default function ImpactStatsSection() {
           viewport={{ once: true }}
         >
           <p className="text-gray-600 mb-4">
-            Join <span className="text-primary font-semibold">500+ donors</span> making this possible
+            Join our community of donors making this possible
           </p>
           <a
             href="/donate"

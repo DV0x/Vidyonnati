@@ -16,7 +16,7 @@ export default function HeroSlider() {
         tag: "For Donors",
         title: "Transform a",
         titleHighlight: "Student's Future",
-        description: "Help brilliant minds from underprivileged backgrounds achieve their dreams through education scholarships.",
+        description: "Support meritorious students from Government High Schools in rural Andhra Pradesh to continue their higher education.",
         image: "https://images.unsplash.com/photo-1523240795612-9a054b0db644?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80",
         primaryCta: { text: "Donate Now", href: "/donate", icon: Heart },
         secondaryCta: { text: "See Impact", href: "/about" },
@@ -25,28 +25,28 @@ export default function HeroSlider() {
         tag: "For Students",
         title: "Your Education,",
         titleHighlight: "Our Mission",
-        description: "Are you a meritorious student facing financial challenges? Apply for a scholarship and let us support your journey.",
+        description: "Studying in a Government or Aided High School in AP? Apply for our scholarship through the Mandal-level screening test.",
         image: "https://images.unsplash.com/photo-1427504494785-3a9ca7044f45?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80",
         primaryCta: { text: "Apply Now", href: "/apply", icon: GraduationCap },
         secondaryCta: { text: "Eligibility", href: "/about" },
       },
       {
         tag: "Transparency",
-        title: "100% of Donations",
-        titleHighlight: "Reach Students",
-        description: "We ensure complete transparency. Track your impact and see exactly how your contribution helps students succeed.",
+        title: "Every Rupee",
+        titleHighlight: "Reaches Students",
+        description: "80G certified and 12AB registered — your donations are tax-deductible with complete transparency and accountability.",
         image: "https://images.unsplash.com/photo-1509062522246-3755977927d7?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80",
         primaryCta: { text: "Fund a Student", href: "/donate", icon: Heart },
         secondaryCta: { text: "Our Process", href: "/about" },
       },
       {
-        tag: "Success Stories",
-        title: "250+ Lives",
-        titleHighlight: "Transformed",
-        description: "From rural villages to top universities - witness the transformative power of education and community support.",
+        tag: "Our Impact",
+        title: "45+ Students",
+        titleHighlight: "Empowered",
+        description: "From 24 Government High Schools across 3 mandals in Bapatla District — building futures through education scholarships.",
         image: "https://images.unsplash.com/photo-1541339907198-e08756dedf3f?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80",
         primaryCta: { text: "Join Us", href: "/donate", icon: Heart },
-        secondaryCta: { text: "Read Stories", href: "/students" },
+        secondaryCta: { text: "Learn More", href: "/about" },
       },
     ],
     [],
@@ -229,7 +229,7 @@ export default function HeroSlider() {
                                   <GraduationCap className="w-6 h-6 text-primary" />
                                 </div>
                                 <div>
-                                  <p className="text-2xl font-bold text-gray-900">250+</p>
+                                  <p className="text-2xl font-bold text-gray-900">45+</p>
                                   <p className="text-sm text-gray-500">Students Helped</p>
                                 </div>
                               </div>

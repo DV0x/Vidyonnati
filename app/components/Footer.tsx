@@ -46,8 +46,8 @@ export default function Footer() {
               </div>
             </div>
             <p className="text-gray-400 text-sm leading-relaxed mb-6">
-              Empowering meritorious students from underprivileged backgrounds
-              to achieve their educational dreams through scholarships and mentorship.
+              Promoting education and extending financial help to deserving students
+              from Government High Schools in rural Andhra Pradesh since 2023.
             </p>
 
             {/* Trust Badges */}
@@ -117,8 +117,9 @@ export default function Footer() {
               <div className="flex items-start gap-3 text-gray-400">
                 <MapPin className="w-4 h-4 mt-0.5 text-primary flex-shrink-0" />
                 <span className="text-sm">
-                  Hyderabad, Telangana<br />
-                  India
+                  D.No 6-218, 4th Lane, Srinagar Colony,<br />
+                  Kurnool Rd, Ongole, Prakasam,<br />
+                  Andhra Pradesh, India — 523002
                 </span>
               </div>
             </div>

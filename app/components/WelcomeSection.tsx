@@ -2,7 +2,7 @@
 
 import Image from "next/image"
 import { motion } from "motion/react"
-import { Shield, Award, Heart, Quote } from "lucide-react"
+import { Shield, Award, Heart } from "lucide-react"
 
 const trustBadges = [
   {
@@ -12,13 +12,13 @@ const trustBadges = [
   },
   {
     icon: Award,
-    title: "Registered NPO",
-    description: "Govt. recognized charity",
+    title: "Section 8 Company",
+    description: "Under Companies Act 2013",
   },
   {
     icon: Heart,
-    title: "Since 2018",
-    description: "6+ years of impact",
+    title: "Since 2023",
+    description: "3 years of impact",
   },
 ]
 
@@ -71,34 +71,32 @@ export default function WelcomeSection() {
               transition={{ duration: 0.6, delay: 0.3 }}
               viewport={{ once: true }}
             >
-              Vidyonnati Foundation is dedicated to empowering meritorious students from
-              economically disadvantaged backgrounds. We believe that financial constraints
-              should never be a barrier to education. Our mission is to identify, support,
-              and nurture bright minds from rural India, enabling them to achieve their
-              full potential.
+              Vidyonnati Foundation is incorporated under Section 8(1) of the Companies Act, 2013
+              as an NGO with the mission to promote education and extend financial help to deserving
+              students. For students from low-income families in rural areas, higher education is
+              often a dream that becomes a financial burden, leading to dropouts. We work to change that.
             </motion.p>
 
-            {/* Founder Quote */}
+            {/* Vision & Mission */}
             <motion.div
-              className="bg-gradient-to-r from-orange-50 to-orange-50/30 rounded-2xl p-6 border-l-4 border-primary"
+              className="space-y-4"
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.4 }}
               viewport={{ once: true }}
             >
-              <Quote className="w-8 h-8 text-primary/30 mb-3" />
-              <p className="text-gray-700 italic leading-relaxed mb-4">
-                "Every student we support is a seed of change planted in their community.
-                When one child succeeds, they lift their entire family and inspire their village."
-              </p>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-primary/20 rounded-full flex items-center justify-center">
-                  <span className="text-primary font-bold text-sm">VF</span>
-                </div>
-                <div>
-                  <p className="font-semibold text-gray-900 text-sm">Vidyonnati Foundation</p>
-                  <p className="text-gray-500 text-xs">Our Guiding Philosophy</p>
-                </div>
+              <div className="bg-gradient-to-r from-orange-50 to-orange-50/30 rounded-2xl p-5 border-l-4 border-primary">
+                <p className="text-sm font-semibold text-primary mb-1">Our Vision</p>
+                <p className="text-gray-700 leading-relaxed">
+                  Empowering youth through financial aid and guidance to achieve their professional aspirations.
+                </p>
+              </div>
+              <div className="bg-gradient-to-r from-orange-50 to-orange-50/30 rounded-2xl p-5 border-l-4 border-primary/60">
+                <p className="text-sm font-semibold text-primary mb-1">Our Mission</p>
+                <p className="text-gray-700 leading-relaxed">
+                  To build a sustainable and progressive society by facilitating deserving students
+                  through education, employment, and social responsibility in nation building.
+                </p>
               </div>
             </motion.div>
 
@@ -162,18 +160,18 @@ export default function WelcomeSection() {
               >
                 <div className="flex items-center justify-between">
                   <div className="text-center flex-1">
-                    <p className="text-2xl font-bold text-primary">250+</p>
+                    <p className="text-2xl font-bold text-primary">45+</p>
                     <p className="text-xs text-gray-500">Students</p>
                   </div>
                   <div className="w-px h-10 bg-gray-200" />
                   <div className="text-center flex-1">
-                    <p className="text-2xl font-bold text-primary">₹50L+</p>
-                    <p className="text-xs text-gray-500">Scholarships</p>
+                    <p className="text-2xl font-bold text-primary">24</p>
+                    <p className="text-xs text-gray-500">Schools</p>
                   </div>
                   <div className="w-px h-10 bg-gray-200" />
                   <div className="text-center flex-1">
-                    <p className="text-2xl font-bold text-primary">15+</p>
-                    <p className="text-xs text-gray-500">Colleges</p>
+                    <p className="text-2xl font-bold text-primary">3</p>
+                    <p className="text-xs text-gray-500">Mandals</p>
                   </div>
                 </div>
               </motion.div>
@@ -187,8 +185,8 @@ export default function WelcomeSection() {
               transition={{ duration: 0.5, delay: 0.7 }}
               viewport={{ once: true }}
             >
-              <p className="text-xs font-medium">Trusted by</p>
-              <p className="text-lg font-bold">500+ Donors</p>
+              <p className="text-xs font-medium">Est.</p>
+              <p className="text-lg font-bold">Jan 2023</p>
             </motion.div>
           </motion.div>
         </div>
