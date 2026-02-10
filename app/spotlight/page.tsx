@@ -130,8 +130,8 @@ export default function SpotlightPage() {
               {/* Main image */}
               <div className="relative aspect-[4/3] rounded-2xl lg:rounded-3xl overflow-hidden shadow-2xl shadow-gray-300/50">
                 <Image
-                  src="https://images.unsplash.com/photo-1522202176988-66273c2fd55f?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80"
-                  alt="Students sharing their stories"
+                  src="/images/about/spotlight-group.jpg"
+                  alt="Students and staff at Vidyonnati Foundation"
                   fill
                   className="object-cover"
                   priority
@@ -391,8 +391,8 @@ export default function SpotlightPage() {
               <div className="relative rounded-2xl overflow-hidden shadow-2xl shadow-gray-200/50">
                 <div className="aspect-[4/5] relative">
                   <Image
-                    src="https://images.unsplash.com/photo-1523240795612-9a054b0db644?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80"
-                    alt="Students in classroom"
+                    src="/images/about/screening-classroom.jpg"
+                    alt="Students in screening test classroom"
                     fill
                     className="object-cover"
                     sizes="(max-width: 1024px) 100vw, 50vw"

@@ -142,8 +142,8 @@ export default function WelcomeSection() {
             <div className="relative rounded-2xl overflow-hidden shadow-2xl shadow-gray-200/50">
               <div className="aspect-[4/5] relative">
                 <Image
-                  src="https://images.unsplash.com/photo-1577896851231-70ef18881754?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80"
-                  alt="Students studying together"
+                  src="/images/about/students-group.jpg"
+                  alt="Students and staff at Vidyonnati Foundation event"
                   fill
                   className="object-cover"
                   sizes="(max-width: 1024px) 100vw, 50vw"

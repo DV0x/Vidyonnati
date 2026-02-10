@@ -129,6 +129,18 @@ export default function MainNavigation() {
           </Link>
           */}
           <Link
+            href="/gallery"
+            className={`nav-link font-medium ${isActive("/gallery") ? "text-primary" : ""}`}
+          >
+            Gallery
+          </Link>
+          <Link
+            href="/media"
+            className={`nav-link font-medium ${isActive("/media") ? "text-primary" : ""}`}
+          >
+            In the Media
+          </Link>
+          <Link
             href="/spotlight"
             className={`nav-link font-medium flex items-center gap-1 ${isActive("/spotlight") ? "text-primary" : ""}`}
           >
@@ -234,6 +246,24 @@ export default function MainNavigation() {
                   Our Scholars
                 </Link>
                 */}
+                <Link
+                  href="/gallery"
+                  className={`nav-link text-lg py-3 px-4 rounded-lg hover:bg-gray-50 transition-colors ${
+                    isActive("/gallery") ? "text-primary bg-primary/5" : ""
+                  }`}
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  Gallery
+                </Link>
+                <Link
+                  href="/media"
+                  className={`nav-link text-lg py-3 px-4 rounded-lg hover:bg-gray-50 transition-colors ${
+                    isActive("/media") ? "text-primary bg-primary/5" : ""
+                  }`}
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  In the Media
+                </Link>
                 <Link
                   href="/spotlight"
                   className={`nav-link text-lg py-3 px-4 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 ${

@@ -9,6 +9,8 @@ import EmpoweringSection from "./components/EmpoweringSection"
 import GoalsSection from "./components/GoalsSection"
 import HowWeWorkSection from "./components/HowWeWorkSection"
 import WhySupportUsSection from "./components/WhySupportUsSection"
+import GalleryPreviewSection from "./components/GalleryPreviewSection"
+import MediaPreviewSection from "./components/MediaPreviewSection"
 // TODO: Re-enable when ready
 // import TestimonialSection from "./components/TestimonialSection"
 
@@ -22,6 +24,8 @@ export default function Home() {
       <EmpoweringSection />
       <GoalsSection />
       <HowWeWorkSection />
+      <GalleryPreviewSection />
+      <MediaPreviewSection />
       <WhySupportUsSection />
       {/* TODO: Re-enable TestimonialSection (Voices of Impact) when ready */}
     </>
