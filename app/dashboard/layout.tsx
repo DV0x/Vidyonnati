@@ -47,6 +47,7 @@ export default function DashboardLayout({
   const handleSignOut = async () => {
     await signOut()
     router.push('/')
+    router.refresh()
   }
 
   // Only show skeleton on initial load, not during auth state changes

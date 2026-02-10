@@ -75,11 +75,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const signOut = async () => {
-    await supabase.auth.signOut({ scope: 'global' })
+    // Always clear local state first to immediately update UI
     setUser(null)
     setSession(null)
     setStudent(null)
     setIsAdmin(false)
+
+    const { error } = await supabase.auth.signOut({ scope: 'global' })
+    if (error) {
+      // signOut can fail to clear cookies when the API call fails or
+      // the session is already expired. Force-clear auth cookies so
+      // stale tokens don't resurrect the session on page refresh.
+      console.error('Sign out error, clearing cookies manually:', error.message)
+      document.cookie.split(';').forEach(c => {
+        const name = c.split('=')[0].trim()
+        if (name.startsWith('sb-')) {
+          document.cookie = `${name}=; path=/; max-age=0`
+        }
+      })
+    }
   }
 
   useEffect(() => {
@@ -96,12 +110,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setSession(session)
           setUser(session?.user ?? null)
 
-          if (session?.user) {
-            await fetchUserData(session.user.id)
+          try {
+            if (session?.user) {
+              await fetchUserData(session.user.id)
+            }
+          } catch (err) {
+            console.error('Failed to fetch user data on init:', err)
+          } finally {
+            // MUST always run so the UI doesn't stay in a loading state
+            setIsLoading(false)
+            initializedRef.current = true
           }
-
-          setIsLoading(false)
-          initializedRef.current = true
         } else if (event === 'SIGNED_IN') {
           setSession(session)
           setUser(session?.user ?? null)
@@ -111,16 +130,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // fire SIGNED_IN after INITIAL_SESSION for existing sessions).
             initializedRef.current = true
             setIsLoading(true)
-            if (session?.user) {
-              await fetchUserData(session.user.id)
+            try {
+              if (session?.user) {
+                await fetchUserData(session.user.id)
+              }
+            } catch (err) {
+              console.error('Failed to fetch user data on sign-in:', err)
+            } finally {
+              setIsLoading(false)
             }
-            setIsLoading(false)
           } else {
             // Post-init SIGNED_IN: session recovery after idle / tab
             // reactivation. Silently refresh user data in the background
             // without showing a loading spinner.
             if (session?.user) {
-              await fetchUserData(session.user.id)
+              fetchUserData(session.user.id).catch(err =>
+                console.error('Failed to refresh user data:', err)
+              )
             }
           }
         } else if (event === 'TOKEN_REFRESHED') {
