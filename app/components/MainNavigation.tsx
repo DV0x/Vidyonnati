@@ -120,12 +120,14 @@ export default function MainNavigation() {
           >
             About Us
           </Link>
+          {/* TODO: Re-enable Our Scholars nav link when ready
           <Link
             href="/students"
             className={`nav-link font-medium ${isActive("/students") ? "text-primary" : ""}`}
           >
             Our Scholars
           </Link>
+          */}
           <Link
             href="/spotlight"
             className={`nav-link font-medium flex items-center gap-1 ${isActive("/spotlight") ? "text-primary" : ""}`}
@@ -221,6 +223,7 @@ export default function MainNavigation() {
                 >
                   About Us
                 </Link>
+                {/* TODO: Re-enable Our Scholars nav link when ready
                 <Link
                   href="/students"
                   className={`nav-link text-lg py-3 px-4 rounded-lg hover:bg-gray-50 transition-colors ${
@@ -230,6 +233,7 @@ export default function MainNavigation() {
                 >
                   Our Scholars
                 </Link>
+                */}
                 <Link
                   href="/spotlight"
                   className={`nav-link text-lg py-3 px-4 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 ${
