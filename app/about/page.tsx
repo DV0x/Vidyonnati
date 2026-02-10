@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import { motion } from "motion/react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -32,6 +33,7 @@ const trustees = [
     description:
       "Retd. Executive from Syndicate Bank, ex-Director RUDSETI, ex-RO Debt Recovery Tribunal. Presently engaged in farming and social service.",
     location: "Ongole, Andhra Pradesh",
+    image: "/images/trustees/veeranarayana.jpg",
   },
   {
     name: "Mr. Bodempudi Jayasankar",
@@ -40,6 +42,7 @@ const trustees = [
     description:
       "Physical Education Teacher at SVK High School, Gangavaram. Actively involved in student development and education outreach.",
     location: "Gangavaram, Andhra Pradesh",
+    image: "/images/trustees/jayasankar.jpg",
   },
   {
     name: "Dr. Dhulipalla Sharmila Priyanka",
@@ -48,6 +51,7 @@ const trustees = [
     description:
       "Medical professional and patron of the foundation, supporting the cause of education for underprivileged students.",
     location: "Andhra Pradesh",
+    image: "/images/trustees/priyanka.jpg",
   },
 ]
 
@@ -374,11 +378,14 @@ export default function AboutPage() {
                 transition={{ duration: 0.4, delay: index * 0.1 }}
                 viewport={{ once: true }}
               >
-                <div className="w-16 h-16 bg-gradient-to-br from-primary/10 to-orange-100 rounded-full flex items-center justify-center mb-4 mx-auto">
-                  <span className="text-primary font-bold text-lg">
-                    {trustee.name.split(" ").slice(-1)[0][0]}
-                    {trustee.name.split(" ")[0][0]}
-                  </span>
+                <div className="w-24 h-24 rounded-full overflow-hidden mb-4 mx-auto ring-4 ring-primary/10">
+                  <Image
+                    src={trustee.image}
+                    alt={trustee.name}
+                    width={96}
+                    height={96}
+                    className="object-cover w-full h-full"
+                  />
                 </div>
                 <div className="text-center">
                   <h3 className="text-lg font-bold text-gray-900">
