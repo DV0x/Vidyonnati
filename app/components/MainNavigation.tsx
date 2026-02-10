@@ -21,10 +21,9 @@ export default function MainNavigation() {
   const router = useRouter()
   const { user, student, isLoading, signOut } = useAuth()
 
-  // DEBUG: Track what auth values MainNavigation sees
-  useEffect(() => {
-    console.log(`[AUTH DEBUG] MainNavigation render: isLoading=${isLoading}, hasUser=${!!user}, userName=${student?.full_name || user?.email?.split("@")[0] || 'none'}`)
-  }, [isLoading, user, student])
+  // Show auth section as soon as user is available, or after loading completes.
+  // Only hide when both loading AND no user (prevents Login button flash).
+  const showAuth = !isLoading || !!user
 
   const handleSignOut = async () => {
     await signOut()
@@ -154,48 +153,49 @@ export default function MainNavigation() {
               </Button>
             </Link>
 
-            {/* Auth Section */}
-            {!isLoading && (
-              <>
-                {user ? (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" className="flex items-center gap-2 ml-2">
-                        <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
-                          <User className="w-4 h-4 text-primary" />
-                        </div>
-                        <span className="hidden xl:inline text-sm font-medium">
-                          {student?.full_name || user.email?.split("@")[0]}
-                        </span>
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-48">
-                      <DropdownMenuItem asChild>
-                        <Link href="/dashboard" className="flex items-center gap-2 cursor-pointer">
-                          <LayoutDashboard className="w-4 h-4" />
-                          Dashboard
-                        </Link>
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        onClick={handleSignOut}
-                        className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600"
-                      >
-                        <LogOut className="w-4 h-4" />
-                        Sign Out
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                ) : (
-                  <Link href="/login">
+            {/* Auth Section — always in the DOM, hidden via CSS until auth
+                resolves. Avoids a React hydration issue where conditional
+                mounting ({condition && <Component/>}) intermittently fails
+                to insert new DOM nodes after a server-rendered empty slot. */}
+            <div className={showAuth ? '' : 'hidden'}>
+              {user ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
                     <Button variant="ghost" className="flex items-center gap-2 ml-2">
-                      <LogIn className="w-4 h-4" />
-                      Login
+                      <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
+                        <User className="w-4 h-4 text-primary" />
+                      </div>
+                      <span className="hidden xl:inline text-sm font-medium">
+                        {student?.full_name || user.email?.split("@")[0]}
+                      </span>
                     </Button>
-                  </Link>
-                )}
-              </>
-            )}
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuItem asChild>
+                      <Link href="/dashboard" className="flex items-center gap-2 cursor-pointer">
+                        <LayoutDashboard className="w-4 h-4" />
+                        Dashboard
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={handleSignOut}
+                      className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      Sign Out
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : (
+                <Link href="/login">
+                  <Button variant="ghost" className="flex items-center gap-2 ml-2">
+                    <LogIn className="w-4 h-4" />
+                    Login
+                  </Button>
+                </Link>
+              )}
+            </div>
           </div>
         </div>
 
@@ -262,8 +262,7 @@ export default function MainNavigation() {
                 </div>
 
                 {/* Mobile Auth Section */}
-                {!isLoading && (
-                  <div className="pt-6 space-y-3 border-t mt-4">
+                <div className={`pt-6 space-y-3 border-t mt-4 ${showAuth ? '' : 'hidden'}`}>
                     {user ? (
                       <>
                         <div className="flex items-center gap-3 px-4 py-2 bg-gray-50 rounded-lg">
@@ -317,8 +316,7 @@ export default function MainNavigation() {
                         </Link>
                       </>
                     )}
-                  </div>
-                )}
+                </div>
               </div>
 
               {/* Mobile footer info */}

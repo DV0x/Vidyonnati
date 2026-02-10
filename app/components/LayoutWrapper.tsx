@@ -17,18 +17,16 @@ export default function LayoutWrapper({ children }: LayoutWrapperProps) {
   const isAdmin = pathname?.startsWith('/admin')
   const hideChrome = isDashboard || isAdmin
 
+  if (hideChrome) {
+    return <>{children}</>
+  }
+
   return (
     <>
-      {/* Keep nav always mounted so it stays subscribed to auth context.
-          Hiding with CSS instead of unmounting avoids a stale-context issue
-          where the auth section appears empty after client-side navigation
-          from dashboard back to the landing page. */}
-      <div className={hideChrome ? 'hidden' : ''}>
-        <TopNavigation />
-        <MainNavigation />
-      </div>
-      {hideChrome ? children : <main>{children}</main>}
-      {!hideChrome && <Footer />}
+      <TopNavigation />
+      <MainNavigation />
+      <main>{children}</main>
+      <Footer />
     </>
   )
 }
