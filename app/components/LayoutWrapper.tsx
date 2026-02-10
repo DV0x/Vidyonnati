@@ -15,20 +15,20 @@ export default function LayoutWrapper({ children }: LayoutWrapperProps) {
   // Hide main site navigation on dashboard and admin routes
   const isDashboard = pathname?.startsWith('/dashboard')
   const isAdmin = pathname?.startsWith('/admin')
-
-  if (isDashboard || isAdmin) {
-    // Dashboard and Admin have their own layouts, just render children
-    return <>{children}</>
-  }
+  const hideChrome = isDashboard || isAdmin
 
   return (
     <>
-      {/* Top bar - scrolls away */}
-      <TopNavigation />
-      {/* Main nav - sticky */}
-      <MainNavigation />
-      <main>{children}</main>
-      <Footer />
+      {/* Keep nav always mounted so it stays subscribed to auth context.
+          Hiding with CSS instead of unmounting avoids a stale-context issue
+          where the auth section appears empty after client-side navigation
+          from dashboard back to the landing page. */}
+      <div className={hideChrome ? 'hidden' : ''}>
+        <TopNavigation />
+        <MainNavigation />
+      </div>
+      {hideChrome ? children : <main>{children}</main>}
+      {!hideChrome && <Footer />}
     </>
   )
 }
