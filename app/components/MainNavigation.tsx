@@ -28,7 +28,6 @@ export default function MainNavigation() {
   const handleSignOut = async () => {
     await signOut()
     router.push("/")
-    router.refresh()
   }
 
   // Handle scroll detection for sticky nav
