@@ -8,6 +8,7 @@ import WelcomeSection from "./components/WelcomeSection"
 import EmpoweringSection from "./components/EmpoweringSection"
 import GoalsSection from "./components/GoalsSection"
 import HowWeWorkSection from "./components/HowWeWorkSection"
+import ScholarsPreviewSection from "./components/ScholarsPreviewSection"
 import WhySupportUsSection from "./components/WhySupportUsSection"
 import GalleryPreviewSection from "./components/GalleryPreviewSection"
 import MediaPreviewSection from "./components/MediaPreviewSection"
@@ -19,6 +20,7 @@ export default function Home() {
     <>
       <HeroSlider />
       <ImpactStatsSection />
+      <ScholarsPreviewSection />
       {/* TODO: Re-enable StudentSpotlightSection when ready */}
       <WelcomeSection />
       <EmpoweringSection />

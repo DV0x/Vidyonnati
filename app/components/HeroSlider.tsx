@@ -15,7 +15,7 @@ export default function HeroSlider() {
       {
         tag: "For Donors",
         title: "Transform a",
-        titleHighlight: "Student's Future",
+        titleHighlight: "Students Future",
         description: "Support meritorious students from Government High Schools in rural Andhra Pradesh to continue their higher education.",
         image: "/images/hero/ceremony-donors.jpg",
         primaryCta: { text: "Donate Now", href: "/donate", icon: Heart },
@@ -43,7 +43,7 @@ export default function HeroSlider() {
         tag: "Our Impact",
         title: "45+ Students",
         titleHighlight: "Empowered",
-        description: "From 24 Government High Schools across 3 mandals in Bapatla District — building futures through education scholarships.",
+        description: "From 24 Government High Schools across 3 mandals (Addanki, J. Panguluru & Inkollu) in Prakasam and Bapatla Districts — building futures through education scholarships.",
         image: "/images/hero/certificate-distribution.jpg",
         primaryCta: { text: "Join Us", href: "/donate", icon: Heart },
         secondaryCta: { text: "Learn More", href: "/about" },

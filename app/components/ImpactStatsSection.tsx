@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from "react"
 import { motion, useInView } from "motion/react"
-import { GraduationCap, IndianRupee, TrendingUp, Building2 } from "lucide-react"
+import { GraduationCap, IndianRupee, TrendingUp, Building2, MapPin } from "lucide-react"
 
 interface StatItem {
   icon: React.ElementType
@@ -16,10 +16,10 @@ interface StatItem {
 const stats: StatItem[] = [
   {
     icon: GraduationCap,
-    value: 45,
-    suffix: "+",
+    value: 69,
+    suffix: "",
     label: "Students Benefited",
-    description: "Meritorious scholars supported",
+    description: "Merit & need-based scholars supported",
   },
   {
     icon: TrendingUp,
@@ -36,11 +36,11 @@ const stats: StatItem[] = [
     description: "Govt & aided schools in AP",
   },
   {
-    icon: IndianRupee,
+    icon: MapPin,
     value: 3,
     suffix: "",
     label: "Mandals Covered",
-    description: "Bapatla District, Andhra Pradesh",
+    description: "Addanki, J. Panguluru & Inkollu",
   },
 ]
 
@@ -56,12 +56,14 @@ function AnimatedCounter({
   isInView: boolean
 }) {
   const [count, setCount] = useState(0)
+  const hasDecimal = value % 1 !== 0
 
   useEffect(() => {
     if (!isInView) return
 
     const duration = 2000
-    const steps = 60
+    // Use fewer steps for small values so each increment is meaningful
+    const steps = hasDecimal ? 40 : Math.min(60, Math.max(value, 10))
     const stepValue = value / steps
     const stepDuration = duration / steps
     let current = 0
@@ -72,16 +74,18 @@ function AnimatedCounter({
         setCount(value)
         clearInterval(timer)
       } else {
-        setCount(Math.floor(current))
+        setCount(hasDecimal ? Math.round(current * 10) / 10 : Math.floor(current))
       }
     }, stepDuration)
 
     return () => clearInterval(timer)
-  }, [value, isInView])
+  }, [value, hasDecimal, isInView])
+
+  const display = hasDecimal ? count.toFixed(1) : count
 
   return (
     <span>
-      {prefix}{count}{suffix}
+      {prefix}{display}{suffix}
     </span>
   )
 }
@@ -119,12 +123,34 @@ export default function ImpactStatsSection() {
           </p>
         </motion.div>
 
+        {/* Featured Stat — Total Disbursed */}
+        <motion.div
+          className="relative bg-gradient-to-r from-primary to-orange-500 rounded-2xl p-6 md:p-8 mb-6 text-center text-white shadow-lg shadow-primary/20"
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, ease: "easeOut" }}
+          viewport={{ once: true }}
+        >
+          <div className="absolute inset-0 rounded-2xl bg-[radial-gradient(circle_at_30%_50%,rgba(255,255,255,0.12),transparent_70%)]" />
+          <div className="relative flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-6">
+            <div className="flex items-center justify-center w-14 h-14 bg-white/15 rounded-2xl backdrop-blur-sm">
+              <IndianRupee className="w-7 h-7 text-white" />
+            </div>
+            <div>
+              <p className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight">
+                <AnimatedCounter value={13.1} suffix=" Lakhs" isInView={isInView} />
+              </p>
+              <p className="text-white/80 text-sm md:text-base mt-1">Total Scholarships Disbursed Since 2023</p>
+            </div>
+          </div>
+        </motion.div>
+
         {/* Stats - Floating Card */}
         <motion.div
           className="relative bg-white rounded-3xl shadow-xl shadow-orange-900/5 border border-orange-100/80 p-8 md:p-12"
           initial={{ opacity: 0, y: 40 }}
           whileInView={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, ease: "easeOut" }}
+          transition={{ duration: 0.7, ease: "easeOut", delay: 0.1 }}
           viewport={{ once: true }}
         >
           {/* Inner glow effect */}

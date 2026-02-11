@@ -25,38 +25,6 @@ export default function TopNavigation() {
           </a>
         </div>
 
-        {/* Social Links */}
-        <div className="hidden md:flex items-center gap-4">
-          <span className="text-gray-500 mr-2">Follow us:</span>
-          <a
-            href="#"
-            aria-label="Facebook"
-            className="hover:text-primary transition-colors"
-          >
-            <Facebook className="w-4 h-4" />
-          </a>
-          <a
-            href="#"
-            aria-label="Twitter"
-            className="hover:text-primary transition-colors"
-          >
-            <Twitter className="w-4 h-4" />
-          </a>
-          <a
-            href="#"
-            aria-label="LinkedIn"
-            className="hover:text-primary transition-colors"
-          >
-            <Linkedin className="w-4 h-4" />
-          </a>
-          <a
-            href="#"
-            aria-label="Instagram"
-            className="hover:text-primary transition-colors"
-          >
-            <Instagram className="w-4 h-4" />
-          </a>
-        </div>
       </div>
     </div>
   )

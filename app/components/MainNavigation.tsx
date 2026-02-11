@@ -107,7 +107,7 @@ export default function MainNavigation() {
         </button>
 
         {/* Desktop Navigation */}
-        <div className="hidden lg:flex items-center gap-8">
+        <div className="hidden lg:flex items-center gap-5 xl:gap-8">
           <Link
             href="/"
             className={`nav-link font-medium ${isActive("/") ? "text-primary" : ""}`}
@@ -116,18 +116,16 @@ export default function MainNavigation() {
           </Link>
           <Link
             href="/about"
-            className={`nav-link font-medium ${isActive("/about") ? "text-primary" : ""}`}
+            className={`nav-link font-medium whitespace-nowrap ${isActive("/about") ? "text-primary" : ""}`}
           >
             About Us
           </Link>
-          {/* TODO: Re-enable Our Scholars nav link when ready
           <Link
-            href="/students"
-            className={`nav-link font-medium ${isActive("/students") ? "text-primary" : ""}`}
+            href="/scholars"
+            className={`nav-link font-medium whitespace-nowrap ${isActive("/scholars") ? "text-primary" : ""}`}
           >
             Our Scholars
           </Link>
-          */}
           <Link
             href="/gallery"
             className={`nav-link font-medium ${isActive("/gallery") ? "text-primary" : ""}`}
@@ -136,7 +134,7 @@ export default function MainNavigation() {
           </Link>
           <Link
             href="/media"
-            className={`nav-link font-medium ${isActive("/media") ? "text-primary" : ""}`}
+            className={`nav-link font-medium whitespace-nowrap ${isActive("/media") ? "text-primary" : ""}`}
           >
             In the Media
           </Link>
@@ -149,7 +147,7 @@ export default function MainNavigation() {
           </Link>
 
           {/* CTAs and Auth */}
-          <div className="flex items-center gap-3 ml-4">
+          <div className="flex items-center gap-3 ml-2 xl:ml-4">
             <Link href="/apply">
               <Button
                 variant="outline"
@@ -235,17 +233,15 @@ export default function MainNavigation() {
                 >
                   About Us
                 </Link>
-                {/* TODO: Re-enable Our Scholars nav link when ready
                 <Link
-                  href="/students"
+                  href="/scholars"
                   className={`nav-link text-lg py-3 px-4 rounded-lg hover:bg-gray-50 transition-colors ${
-                    isActive("/students") ? "text-primary bg-primary/5" : ""
+                    isActive("/scholars") ? "text-primary bg-primary/5" : ""
                   }`}
                   onClick={() => setIsMenuOpen(false)}
                 >
                   Our Scholars
                 </Link>
-                */}
                 <Link
                   href="/gallery"
                   className={`nav-link text-lg py-3 px-4 rounded-lg hover:bg-gray-50 transition-colors ${

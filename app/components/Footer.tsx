@@ -6,16 +6,13 @@ import { Mail, Phone, MapPin, GraduationCap, Shield, Award, FileCheck, Heart } f
 const quickLinks = [
   { label: "Home", href: "/" },
   { label: "About Us", href: "/about" },
-  { label: "Our Students", href: "/students" },
+  { label: "Our Scholars", href: "/scholars" },
   { label: "How We Work", href: "/about#how-we-work" },
-  { label: "Contact", href: "/contact" },
 ]
 
 const supportLinks = [
   { label: "Donate Now", href: "/donate" },
   { label: "Apply for Scholarship", href: "/apply" },
-  { label: "Partner With Us", href: "/contact" },
-  { label: "FAQ", href: "/faq" },
 ]
 
 const trustBadges = [
