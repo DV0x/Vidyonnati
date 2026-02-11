@@ -173,15 +173,6 @@ export default function HeroSlider() {
                                   <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
                                 </Button>
                               </Link>
-                              <Link href={slide.secondaryCta.href}>
-                                <Button
-                                  size="lg"
-                                  variant="outline"
-                                  className="border-white/30 text-white hover:bg-white/10 rounded-full px-8 py-6 text-base backdrop-blur-sm"
-                                >
-                                  {slide.secondaryCta.text}
-                                </Button>
-                              </Link>
                             </motion.div>
                           </motion.div>
                         )}
