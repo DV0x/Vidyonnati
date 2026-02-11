@@ -44,12 +44,29 @@ export const metadata: Metadata = {
     siteName: "Vidyonnati Foundation",
     locale: "en_IN",
     type: "website",
+    images: [
+      {
+        url: `${siteUrl}/og-image.png`,
+        width: 1200,
+        height: 630,
+        alt: "Vidyonnati Foundation — Scholarships for Meritorious Students",
+        type: "image/png",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "Vidyonnati Foundation — Merit Scholarships for Rural Students",
     description:
       "Supporting 69 meritorious students from Government High Schools in rural AP. Rs. 13.1 Lakhs disbursed. 80G certified donations.",
+    images: [
+      {
+        url: `${siteUrl}/og-image.png`,
+        width: 1200,
+        height: 630,
+        alt: "Vidyonnati Foundation — Scholarships for Meritorious Students",
+      },
+    ],
   },
   robots: {
     index: true,
