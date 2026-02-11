@@ -12,6 +12,7 @@ import ScholarsPreviewSection from "./components/ScholarsPreviewSection"
 import WhySupportUsSection from "./components/WhySupportUsSection"
 import GalleryPreviewSection from "./components/GalleryPreviewSection"
 import MediaPreviewSection from "./components/MediaPreviewSection"
+import TestimonialVideoSection from "./components/TestimonialVideoSection"
 // TODO: Re-enable when ready
 // import TestimonialSection from "./components/TestimonialSection"
 
@@ -28,6 +29,7 @@ export default function Home() {
       <HowWeWorkSection />
       <GalleryPreviewSection />
       <MediaPreviewSection />
+      <TestimonialVideoSection />
       <WhySupportUsSection />
       {/* TODO: Re-enable TestimonialSection (Voices of Impact) when ready */}
     </>
