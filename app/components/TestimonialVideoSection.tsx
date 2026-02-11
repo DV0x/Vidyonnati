@@ -7,9 +7,11 @@ import { Play, Pause, Volume2, VolumeX, Quote } from "lucide-react"
 interface VideoPlayerProps {
   src: string
   orientation: "landscape" | "portrait"
+  name: string
+  subtitle: string
 }
 
-function VideoPlayer({ src, orientation }: VideoPlayerProps) {
+function VideoPlayer({ src, orientation, name, subtitle }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [isMuted, setIsMuted] = useState(true)
@@ -44,70 +46,84 @@ function VideoPlayer({ src, orientation }: VideoPlayerProps) {
   const isPortrait = orientation === "portrait"
 
   return (
-    <div
-      className={`relative rounded-2xl overflow-hidden shadow-xl shadow-gray-200/80 border border-gray-100 cursor-pointer group bg-black ${
-        isPortrait ? "max-h-[500px] md:max-h-none" : ""
-      }`}
-      onClick={togglePlay}
-    >
-      <video
-        ref={videoRef}
-        src={src}
-        muted={isMuted}
-        playsInline
-        preload="metadata"
-        onEnded={handleVideoEnd}
-        className={`w-full object-contain ${
-          isPortrait ? "aspect-[9/16] max-h-[500px] md:max-h-[600px]" : "aspect-video"
+    <div>
+      <div
+        className={`relative rounded-2xl overflow-hidden shadow-xl shadow-gray-200/80 border border-gray-100 cursor-pointer group bg-black ${
+          isPortrait ? "max-h-[480px] md:max-h-none" : ""
         }`}
-      />
+        onClick={togglePlay}
+      >
+        <video
+          ref={videoRef}
+          src={src}
+          muted={isMuted}
+          playsInline
+          preload="metadata"
+          onEnded={handleVideoEnd}
+          className={`w-full object-contain ${
+            isPortrait
+              ? "aspect-[9/16] max-h-[480px] md:max-h-[560px]"
+              : "aspect-video"
+          }`}
+        />
 
-      {/* Play Overlay */}
-      {showOverlay && (
-        <div className="absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity duration-300">
-          <div
-            className={`bg-primary rounded-full flex items-center justify-center shadow-lg shadow-primary/30 hover:scale-110 transition-transform duration-300 ${
-              isPortrait
-                ? "w-14 h-14 md:w-18 md:h-18"
-                : "w-16 h-16 md:w-20 md:h-20"
-            }`}
-          >
-            <Play
-              className={`text-white ml-0.5 ${
-                isPortrait ? "w-6 h-6 md:w-8 md:h-8" : "w-7 h-7 md:w-9 md:h-9"
+        {/* Play Overlay */}
+        {showOverlay && (
+          <div className="absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity duration-300">
+            <div
+              className={`bg-primary rounded-full flex items-center justify-center shadow-lg shadow-primary/30 hover:scale-110 transition-transform duration-300 ${
+                isPortrait
+                  ? "w-14 h-14 md:w-16 md:h-16"
+                  : "w-16 h-16 md:w-20 md:h-20"
               }`}
-            />
+            >
+              <Play
+                className={`text-white ml-0.5 ${
+                  isPortrait
+                    ? "w-6 h-6 md:w-7 md:h-7"
+                    : "w-7 h-7 md:w-9 md:h-9"
+                }`}
+              />
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Hover play/pause (while playing) */}
-      {!showOverlay && (
-        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-          <div className="w-14 h-14 bg-black/50 backdrop-blur-sm rounded-full flex items-center justify-center">
-            {isPlaying ? (
-              <Pause className="w-6 h-6 text-white" />
+        {/* Hover play/pause (while playing) */}
+        {!showOverlay && (
+          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+            <div className="w-14 h-14 bg-black/50 backdrop-blur-sm rounded-full flex items-center justify-center">
+              {isPlaying ? (
+                <Pause className="w-6 h-6 text-white" />
+              ) : (
+                <Play className="w-6 h-6 text-white ml-0.5" />
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Mute/Unmute */}
+        {!showOverlay && (
+          <button
+            onClick={toggleMute}
+            className="absolute bottom-3 right-3 w-9 h-9 bg-black/50 backdrop-blur-sm rounded-full flex items-center justify-center text-white hover:bg-black/70 transition-colors duration-200 z-10"
+            aria-label={isMuted ? "Unmute" : "Mute"}
+          >
+            {isMuted ? (
+              <VolumeX className="w-4 h-4" />
             ) : (
-              <Play className="w-6 h-6 text-white ml-0.5" />
+              <Volume2 className="w-4 h-4" />
             )}
-          </div>
-        </div>
-      )}
+          </button>
+        )}
+      </div>
 
-      {/* Mute/Unmute */}
-      {!showOverlay && (
-        <button
-          onClick={toggleMute}
-          className="absolute bottom-3 right-3 w-9 h-9 bg-black/50 backdrop-blur-sm rounded-full flex items-center justify-center text-white hover:bg-black/70 transition-colors duration-200 z-10"
-          aria-label={isMuted ? "Unmute" : "Mute"}
-        >
-          {isMuted ? (
-            <VolumeX className="w-4 h-4" />
-          ) : (
-            <Volume2 className="w-4 h-4" />
-          )}
-        </button>
-      )}
+      {/* Caption */}
+      <div className="mt-3 px-1">
+        <h4 className="font-semibold text-gray-900 text-sm md:text-base">
+          {name}
+        </h4>
+        <p className="text-gray-500 text-xs md:text-sm">{subtitle}</p>
+      </div>
     </div>
   )
 }
@@ -140,29 +156,69 @@ export default function TestimonialVideoSection() {
           </p>
         </motion.div>
 
-        {/* Two-video layout: landscape (wider) + portrait (narrower) */}
-        <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-[3fr_2fr] gap-6 md:gap-8 items-center">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-            viewport={{ once: true }}
-          >
-            <VideoPlayer src="/videos/testimonial.mp4" orientation="landscape" />
-          </motion.div>
+        <div className="max-w-6xl mx-auto space-y-8">
+          {/* Row 1: landscape + portrait */}
+          <div className="grid grid-cols-1 md:grid-cols-[3fr_2fr] gap-6 md:gap-8 items-start">
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.1 }}
+              viewport={{ once: true }}
+            >
+              <VideoPlayer
+                src="/videos/testimonial.mp4"
+                orientation="landscape"
+                name="Student Testimonial"
+                subtitle="Scholarship Beneficiary"
+              />
+            </motion.div>
 
-          <motion.div
-            className="flex justify-center"
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.25 }}
-            viewport={{ once: true }}
-          >
-            <VideoPlayer
-              src="/videos/testimonial-2.mp4"
-              orientation="portrait"
-            />
-          </motion.div>
+            <motion.div
+              className="flex justify-center"
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.25 }}
+              viewport={{ once: true }}
+            >
+              <VideoPlayer
+                src="/videos/testimonial-2.mp4"
+                orientation="portrait"
+                name="Shaik Sana"
+                subtitle="ZPHS Inkollu, Inkollu — Completed Intermediate, now in Graduation"
+              />
+            </motion.div>
+          </div>
+
+          {/* Row 2: two landscape videos */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.1 }}
+              viewport={{ once: true }}
+            >
+              <VideoPlayer
+                src="/videos/testimonial-srujana.mp4"
+                orientation="landscape"
+                name="Gottipati Srujana"
+                subtitle="Student, ZPHS Chandaluru, Alavalapadu Village"
+              />
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.25 }}
+              viewport={{ once: true }}
+            >
+              <VideoPlayer
+                src="/videos/testimonial-parent-inkollu.mp4"
+                orientation="landscape"
+                name="Parent of Student Beneficiary"
+                subtitle="ZPHS, Inkollu Village"
+              />
+            </motion.div>
+          </div>
         </div>
       </div>
     </section>
