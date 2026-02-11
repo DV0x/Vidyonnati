@@ -41,7 +41,7 @@ export default function HeroSlider() {
       },
       {
         tag: "Our Impact",
-        title: "45+ Students",
+        title: "69 Students",
         titleHighlight: "Empowered",
         description: "From 24 Government High Schools across 3 mandals (Addanki, J. Panguluru & Inkollu) in Prakasam and Bapatla Districts — building futures through education scholarships.",
         image: "/images/hero/certificate-distribution.jpg",
@@ -220,7 +220,7 @@ export default function HeroSlider() {
                                   <GraduationCap className="w-6 h-6 text-primary" />
                                 </div>
                                 <div>
-                                  <p className="text-2xl font-bold text-gray-900">45+</p>
+                                  <p className="text-2xl font-bold text-gray-900">69</p>
                                   <p className="text-sm text-gray-500">Students Helped</p>
                                 </div>
                               </div>

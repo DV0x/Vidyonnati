@@ -19,7 +19,7 @@ const goals: Goal[] = [
     icon: GraduationCap,
     title: "Students Supported",
     description: "Meritorious scholars from Govt. High Schools",
-    current: 45,
+    current: 69,
     target: 100,
     unit: "students",
   },

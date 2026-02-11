@@ -160,7 +160,7 @@ export default function WelcomeSection() {
               >
                 <div className="flex items-center justify-between">
                   <div className="text-center flex-1">
-                    <p className="text-2xl font-bold text-primary">45+</p>
+                    <p className="text-2xl font-bold text-primary">69</p>
                     <p className="text-xs text-gray-500">Students</p>
                   </div>
                   <div className="w-px h-10 bg-gray-200" />
