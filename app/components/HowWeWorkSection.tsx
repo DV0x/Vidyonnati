@@ -33,7 +33,7 @@ const studentSteps: Step[] = [
   {
     icon: Users,
     title: "Merit Selection",
-    description: "15 meritorious and deserving students are selected per year from across 3 mandals in Bapatla District, Andhra Pradesh.",
+    description: "15 meritorious and deserving students are selected per year from across 3 mandals (Addanki, J. Panguluru & Inkollu) in Prakasam and Bapatla Districts, Andhra Pradesh.",
     highlight: "15 per year",
   },
   {

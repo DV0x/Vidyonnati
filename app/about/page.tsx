@@ -5,24 +5,20 @@ import { motion } from "motion/react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import {
-  GraduationCap,
   Eye,
   Target,
   Shield,
-  Award,
-  FileCheck,
   Users,
   ClipboardCheck,
   BookOpen,
   Rocket,
   MapPin,
   Phone,
-  Mail,
   Globe,
   Heart,
   ArrowRight,
   ExternalLink,
-  Building2,
+  Download,
 } from "lucide-react"
 
 const trustees = [
@@ -50,7 +46,7 @@ const trustees = [
     qualifications: "MBBS, MD",
     description:
       "Medical professional and patron of the foundation, supporting the cause of education for underprivileged students.",
-    location: "Andhra Pradesh",
+    location: "Columbus, USA",
     image: "/images/trustees/priyanka.jpg",
   },
 ]
@@ -60,16 +56,25 @@ const approvals = [
     title: "Company Registration",
     detail: "CIN: U80903AP2023NPL123763",
     subtitle: "Incorporated under Companies Act, 2013 — Section 8(1)",
+    certificate: "/certificates/certificate-of-incorporation.pdf",
+    extraDocs: [
+      { label: "Memorandum of Association", href: "/certificates/memorandum-of-association.pdf" },
+      { label: "Articles of Association", href: "/certificates/articles-of-association.pdf" },
+    ],
   },
   {
     title: "80G Certification",
     detail: "Tax Exemption for Donors",
     subtitle: "Order dated 07/03/2024 — Ministry of Finance, Income Tax Dept.",
+    certificate: "/certificates/80G-approval-order.pdf",
+    highlight: true,
   },
   {
     title: "12AB Registration",
     detail: "Income Tax Exemption",
     subtitle: "Order dated 01/03/2024 — Ministry of Finance, Income Tax Dept.",
+    certificate: "/certificates/12AB-approval-order.pdf",
+    highlight: true,
   },
   {
     title: "PAN & TAN",
@@ -112,7 +117,7 @@ const processSteps = [
     icon: Users,
     title: "Merit Selection",
     description:
-      "15 meritorious and deserving students are selected per year from across 3 mandals in Bapatla District, Andhra Pradesh.",
+      "15 meritorious and deserving students are selected per year from across 3 mandals (Addanki, J. Panguluru & Inkollu) in Prakasam and Bapatla Districts, Andhra Pradesh.",
   },
   {
     icon: BookOpen,
@@ -297,64 +302,21 @@ export default function AboutPage() {
             transition={{ duration: 0.6, delay: 0.4 }}
             viewport={{ once: true }}
           >
-            This selection process can be extended to other Mandals in the state
-            of Andhra Pradesh depending on availability of donations from
-            individuals and companies. High School Heads, Teachers, volunteers,
-            and media participate to enhance the programme.
+            Our short-term target is to cover all 56 Mandals of erstwhile Prakasam
+            District and mandals interested by donors. This selection process can
+            be extended to other Mandals in the state of Andhra Pradesh depending
+            on availability of donations from individuals and companies. High
+            School Heads, Teachers, volunteers, and media participate to enhance
+            the programme.
           </motion.p>
         </div>
       </section>
 
-      {/* Progress Stats */}
-      <section className="py-16 md:py-20 bg-gradient-to-b from-orange-50/60 to-white">
-        <div className="container mx-auto px-4">
-          <motion.div
-            className="text-center mb-12"
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            viewport={{ once: true }}
-          >
-            <span className="inline-block bg-primary/10 text-primary text-sm font-semibold px-4 py-1.5 rounded-full mb-4">
-              Our Progress
-            </span>
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-              Impact in the First <span className="text-primary">3 Years</span>
-            </h2>
-          </motion.div>
-
-          <div className="grid md:grid-cols-3 gap-6 max-w-3xl mx-auto">
-            {[
-              { value: "927", label: "Students Appeared", sub: "For screening tests across mandals" },
-              { value: "45", label: "Students Benefited", sub: "Awarded scholarships year over year" },
-              { value: "24", label: "High Schools Involved", sub: "Govt. & aided schools in Bapatla District" },
-            ].map((stat, index) => (
-              <motion.div
-                key={stat.label}
-                className="bg-white rounded-2xl p-6 shadow-lg border border-orange-100/80 text-center"
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4, delay: index * 0.1 }}
-                viewport={{ once: true }}
-              >
-                <p className="text-4xl md:text-5xl font-bold text-primary mb-2">
-                  {stat.value}
-                </p>
-                <p className="font-semibold text-gray-900 mb-1">
-                  {stat.label}
-                </p>
-                <p className="text-sm text-gray-500">{stat.sub}</p>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* Trustees */}
-      <section className="py-16 md:py-20 bg-white">
+      <section className="py-16 md:py-24 bg-white">
         <div className="container mx-auto px-4">
           <motion.div
-            className="text-center mb-12"
+            className="text-center mb-14"
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
@@ -368,45 +330,90 @@ export default function AboutPage() {
             </h2>
           </motion.div>
 
-          <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
-            {trustees.map((trustee, index) => (
+          <div className="max-w-6xl mx-auto space-y-8">
+            {/* Chairman — featured large card */}
+            {trustees.filter(t => t.role === "Chairman & Director").map((trustee) => (
               <motion.div
                 key={trustee.name}
-                className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100 hover:border-primary/20 hover:shadow-xl transition-all duration-300"
+                className="bg-gradient-to-br from-white to-orange-50/40 rounded-3xl p-8 md:p-10 shadow-xl border border-orange-100/80 hover:shadow-2xl transition-all duration-300"
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4, delay: index * 0.1 }}
+                transition={{ duration: 0.5 }}
                 viewport={{ once: true }}
               >
-                <div className="w-24 h-24 rounded-full overflow-hidden mb-4 mx-auto ring-4 ring-primary/10">
-                  <Image
-                    src={trustee.image}
-                    alt={trustee.name}
-                    width={96}
-                    height={96}
-                    className="object-cover w-full h-full"
-                  />
-                </div>
-                <div className="text-center">
-                  <h3 className="text-lg font-bold text-gray-900">
-                    {trustee.name}
-                  </h3>
-                  <p className="text-primary font-semibold text-sm mb-1">
-                    {trustee.role}
-                  </p>
-                  <p className="text-xs text-gray-400 mb-3">
-                    {trustee.qualifications}
-                  </p>
-                  <p className="text-gray-600 text-sm leading-relaxed mb-3">
-                    {trustee.description}
-                  </p>
-                  <div className="flex items-center justify-center gap-1 text-gray-400 text-xs">
-                    <MapPin className="w-3 h-3" />
-                    {trustee.location}
+                <div className="flex flex-col md:flex-row items-center gap-8">
+                  <div className="w-40 h-40 md:w-48 md:h-48 rounded-2xl overflow-hidden flex-shrink-0 ring-4 ring-primary/15 shadow-lg">
+                    <Image
+                      src={trustee.image}
+                      alt={trustee.name}
+                      width={192}
+                      height={192}
+                      className="object-cover w-full h-full"
+                    />
+                  </div>
+                  <div className="text-center md:text-left flex-1">
+                    <div className="inline-block bg-primary/10 text-primary text-xs font-bold px-3 py-1 rounded-full mb-3">
+                      {trustee.role}
+                    </div>
+                    <h3 className="text-2xl md:text-3xl font-bold text-gray-900 mb-1">
+                      {trustee.name}
+                    </h3>
+                    <p className="text-sm text-gray-400 mb-4">
+                      {trustee.qualifications}
+                    </p>
+                    <p className="text-gray-600 text-base leading-relaxed mb-4 max-w-xl">
+                      {trustee.description}
+                    </p>
+                    <div className="flex items-center justify-center md:justify-start gap-1.5 text-gray-400 text-sm">
+                      <MapPin className="w-4 h-4" />
+                      {trustee.location}
+                    </div>
                   </div>
                 </div>
               </motion.div>
             ))}
+
+            {/* Other Trustees — two-column cards */}
+            <div className="grid md:grid-cols-2 gap-8">
+              {trustees.filter(t => t.role !== "Chairman & Director").map((trustee, index) => (
+                <motion.div
+                  key={trustee.name}
+                  className="bg-gradient-to-br from-white to-orange-50/30 rounded-3xl p-8 shadow-xl border border-orange-100/80 hover:shadow-2xl transition-all duration-300"
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4, delay: index * 0.15 }}
+                  viewport={{ once: true }}
+                >
+                  <div className="flex flex-col items-center text-center">
+                    <div className="w-36 h-36 rounded-2xl overflow-hidden mb-5 ring-4 ring-primary/10 shadow-lg">
+                      <Image
+                        src={trustee.image}
+                        alt={trustee.name}
+                        width={144}
+                        height={144}
+                        className="object-cover w-full h-full"
+                      />
+                    </div>
+                    <div className="inline-block bg-primary/10 text-primary text-xs font-bold px-3 py-1 rounded-full mb-3">
+                      {trustee.role}
+                    </div>
+                    <h3 className="text-xl font-bold text-gray-900 mb-1">
+                      {trustee.name}
+                    </h3>
+                    <p className="text-sm text-gray-400 mb-3">
+                      {trustee.qualifications}
+                    </p>
+                    <p className="text-gray-600 text-sm leading-relaxed mb-4">
+                      {trustee.description}
+                    </p>
+                    <div className="flex items-center justify-center gap-1.5 text-gray-400 text-sm">
+                      <MapPin className="w-4 h-4" />
+                      {trustee.location}
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
           </div>
         </div>
       </section>
@@ -428,27 +435,68 @@ export default function AboutPage() {
               Approvals &{" "}
               <span className="text-primary">Certifications</span>
             </h2>
+            <p className="text-gray-600 max-w-2xl mx-auto">
+              Vidyonnati Foundation is fully registered and certified. Donors can
+              claim tax exemption under Section 80G of the Income Tax Act.
+            </p>
           </motion.div>
 
           <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto">
             {approvals.map((item, index) => (
               <motion.div
                 key={item.title}
-                className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100 flex items-start gap-4"
+                className={`bg-white rounded-2xl p-6 shadow-lg border flex items-start gap-4 ${
+                  item.highlight
+                    ? "border-primary/30 ring-1 ring-primary/10"
+                    : "border-gray-100"
+                }`}
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4, delay: index * 0.1 }}
                 viewport={{ once: true }}
               >
-                <div className="w-12 h-12 bg-green-50 rounded-xl flex items-center justify-center flex-shrink-0">
-                  <Shield className="w-6 h-6 text-green-600" />
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                  item.highlight ? "bg-primary/10" : "bg-green-50"
+                }`}>
+                  <Shield className={`w-6 h-6 ${item.highlight ? "text-primary" : "text-green-600"}`} />
                 </div>
-                <div>
-                  <h3 className="font-bold text-gray-900">{item.title}</h3>
-                  <p className="text-primary text-sm font-medium">
-                    {item.detail}
-                  </p>
-                  <p className="text-gray-500 text-xs mt-1">{item.subtitle}</p>
+                <div className="flex-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h3 className="font-bold text-gray-900">{item.title}</h3>
+                      <p className="text-primary text-sm font-medium">
+                        {item.detail}
+                      </p>
+                      <p className="text-gray-500 text-xs mt-1">{item.subtitle}</p>
+                    </div>
+                  </div>
+                  {(item.certificate || item.extraDocs) && (
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-3">
+                      {item.certificate && (
+                        <a
+                          href={item.certificate}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-primary/80 transition-colors"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          View Certificate
+                        </a>
+                      )}
+                      {item.extraDocs?.map((doc) => (
+                        <a
+                          key={doc.label}
+                          href={doc.href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-primary/80 transition-colors"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          {doc.label}
+                        </a>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </motion.div>
             ))}

@@ -34,9 +34,9 @@ const goals: Goal[] = [
   {
     icon: Users,
     title: "Mandals Covered",
-    description: "Expanding across Andhra Pradesh districts",
+    description: "Addanki, J. Panguluru & Inkollu — targeting all 56 mandals of erstwhile Prakasam District",
     current: 3,
-    target: 10,
+    target: 56,
     unit: "mandals",
   },
   {
