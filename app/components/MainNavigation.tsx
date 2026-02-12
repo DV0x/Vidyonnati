@@ -33,12 +33,21 @@ export default function MainNavigation() {
     router.push("/")
   }
 
-  // Measure nav height for mobile menu positioning
+  // Measure nav bottom position for mobile menu positioning
   useEffect(() => {
-    if (navRef.current) {
-      setNavHeight(navRef.current.offsetHeight)
+    const updateNavBottom = () => {
+      if (navRef.current) {
+        setNavHeight(navRef.current.getBoundingClientRect().bottom)
+      }
     }
-  }, [isScrolled])
+    updateNavBottom()
+    window.addEventListener("scroll", updateNavBottom, { passive: true })
+    window.addEventListener("resize", updateNavBottom, { passive: true })
+    return () => {
+      window.removeEventListener("scroll", updateNavBottom)
+      window.removeEventListener("resize", updateNavBottom)
+    }
+  }, [])
 
   // Handle scroll detection for sticky nav
   useEffect(() => {
