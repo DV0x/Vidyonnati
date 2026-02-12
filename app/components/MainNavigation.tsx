@@ -100,7 +100,7 @@ export default function MainNavigation() {
           </div>
           <span className="text-xl font-bold">
             <span className="text-primary">Vidyonnati</span>
-            <span className="text-gray-700 hidden sm:inline"> Foundation</span>
+            <span className="text-gray-700"> Foundation</span>
           </span>
         </Link>
 
