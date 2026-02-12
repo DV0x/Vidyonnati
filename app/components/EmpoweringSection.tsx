@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { motion } from "motion/react"
 
@@ -51,9 +52,11 @@ export default function EmpoweringSection() {
               transition={{ duration: 0.8, delay: 0.8 }}
               viewport={{ once: true }}
             >
-              <Button className="cta-button text-lg px-8 py-3 bg-primary hover:bg-primary/90 transition-colors duration-300">
-                Donate Now
-              </Button>
+              <Link href="/donate">
+                <Button className="cta-button text-lg px-8 py-3 bg-primary hover:bg-primary/90 transition-colors duration-300">
+                  Donate Now
+                </Button>
+              </Link>
             </motion.div>
           </motion.div>
         </div>
