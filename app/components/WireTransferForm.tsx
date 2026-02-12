@@ -59,19 +59,23 @@ export function WireTransferForm({
           </div>
           <div className="grid grid-cols-3 items-center">
             <span className="font-medium text-gray-600">Account Number:</span>
-            <span className="col-span-2">1234567890</span>
+            <span className="col-span-2 font-mono">20511248091</span>
+          </div>
+          <div className="grid grid-cols-3 items-center">
+            <span className="font-medium text-gray-600">Account Type:</span>
+            <span className="col-span-2">Current Account</span>
           </div>
           <div className="grid grid-cols-3 items-center">
             <span className="font-medium text-gray-600">IFSC Code:</span>
-            <span className="col-span-2">ABCD0001234</span>
+            <span className="col-span-2 font-mono">SBIN0012919</span>
           </div>
           <div className="grid grid-cols-3 items-center">
             <span className="font-medium text-gray-600">Bank Name:</span>
-            <span className="col-span-2">XYZ Bank</span>
+            <span className="col-span-2">State Bank of India</span>
           </div>
           <div className="grid grid-cols-3 items-center">
             <span className="font-medium text-gray-600">Branch:</span>
-            <span className="col-span-2">Main Branch, City</span>
+            <span className="col-span-2">Kurnool Road, Ongole, Prakasam, AP 523002</span>
           </div>
         </CardContent>
       </Card>
