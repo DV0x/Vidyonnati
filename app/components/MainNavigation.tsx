@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
+import { createPortal } from "react-dom"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { Menu, X, Heart, GraduationCap, User, LogOut, LayoutDashboard, LogIn, Star } from "lucide-react"
@@ -49,11 +50,11 @@ export default function MainNavigation() {
     return () => window.removeEventListener("scroll", handleScroll)
   }, [])
 
-  // Close menu when clicking outside
+  // Close menu when clicking outside (nav or mobile menu)
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as HTMLElement
-      if (isMenuOpen && !target.closest("nav")) {
+      if (isMenuOpen && !target.closest("nav") && !target.closest("[data-mobile-menu]")) {
         setIsMenuOpen(false)
       }
     }
@@ -222,11 +223,12 @@ export default function MainNavigation() {
 
       </div>
 
-      {/* Mobile Navigation — rendered outside the container for full-width coverage */}
-      {isMenuOpen && (
+      {/* Mobile Navigation — portaled to document.body to escape sticky parent */}
+      {isMenuOpen && typeof document !== 'undefined' && createPortal(
         <div
-          className="lg:hidden fixed inset-x-0 bottom-0 bg-white z-50 mobile-menu-enter"
-          style={{ top: `${navHeight}px` }}
+          data-mobile-menu
+          className="lg:hidden fixed inset-x-0 bottom-0 bg-white mobile-menu-enter"
+          style={{ top: `${navHeight}px`, zIndex: 9999 }}
         >
           <div className="flex flex-col h-full overflow-y-auto">
             <div className="flex flex-col p-6 space-y-2">
@@ -370,7 +372,8 @@ export default function MainNavigation() {
               </p>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </nav>
   )
