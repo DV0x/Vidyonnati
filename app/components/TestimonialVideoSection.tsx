@@ -6,12 +6,13 @@ import { Play, Pause, Volume2, VolumeX, Quote } from "lucide-react"
 
 interface VideoPlayerProps {
   src: string
+  poster: string
   orientation: "landscape" | "portrait"
   name: string
   subtitle: string
 }
 
-function VideoPlayer({ src, orientation, name, subtitle }: VideoPlayerProps) {
+function VideoPlayer({ src, poster, orientation, name, subtitle }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [isMuted, setIsMuted] = useState(true)
@@ -56,6 +57,7 @@ function VideoPlayer({ src, orientation, name, subtitle }: VideoPlayerProps) {
         <video
           ref={videoRef}
           src={src}
+          poster={poster}
           muted={isMuted}
           playsInline
           preload="metadata"
@@ -167,6 +169,7 @@ export default function TestimonialVideoSection() {
             >
               <VideoPlayer
                 src="/videos/testimonial.mp4"
+                poster="/videos/poster-testimonial.jpg"
                 orientation="landscape"
                 name="Student Testimonial"
                 subtitle="Scholarship Beneficiary"
@@ -182,6 +185,7 @@ export default function TestimonialVideoSection() {
             >
               <VideoPlayer
                 src="/videos/testimonial-2.mp4"
+                poster="/videos/poster-testimonial-2.jpg"
                 orientation="portrait"
                 name="Shaik Sana"
                 subtitle="ZPHS Inkollu, Inkollu — Completed Intermediate, now in Graduation"
@@ -199,6 +203,7 @@ export default function TestimonialVideoSection() {
             >
               <VideoPlayer
                 src="/videos/testimonial-srujana.mp4"
+                poster="/videos/poster-testimonial-srujana.jpg"
                 orientation="landscape"
                 name="Gottipati Srujana"
                 subtitle="Student, ZPHS Chandaluru, Alavalapadu Village"
@@ -213,6 +218,7 @@ export default function TestimonialVideoSection() {
             >
               <VideoPlayer
                 src="/videos/testimonial-parent-inkollu.mp4"
+                poster="/videos/poster-testimonial-parent-inkollu.jpg"
                 orientation="landscape"
                 name="Parent of Student Beneficiary"
                 subtitle="ZPHS, Inkollu Village"
