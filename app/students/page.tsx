@@ -13,25 +13,6 @@ export default function StudentsPage() {
       <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-primary/5 rounded-full blur-3xl -translate-x-1/4 translate-y-1/4" />
 
       <div className="container mx-auto px-4 relative z-10">
-        {/* Page Header */}
-        <motion.div
-          className="text-center mb-12"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-        >
-          <span className="inline-block bg-primary/10 text-primary text-sm font-semibold px-4 py-1.5 rounded-full mb-4">
-            Screened & Verified Students
-          </span>
-          <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-gray-900 mb-4">
-            Featured <span className="text-primary">Students</span>
-          </h1>
-          <p className="text-gray-600 max-w-2xl mx-auto text-lg">
-            Each student is personally verified by our team. Connect with us to learn
-            more about their journey and how you can make a difference.
-          </p>
-        </motion.div>
-
         {/* Coming Soon State */}
         <motion.div
           className="text-center py-16 md:py-20"
