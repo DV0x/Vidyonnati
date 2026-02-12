@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { Menu, X, Heart, GraduationCap, User, LogOut, LayoutDashboard, LogIn, Star } from "lucide-react"
@@ -17,6 +17,8 @@ import { useAuth } from "@/app/context/AuthContext"
 export default function MainNavigation() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isScrolled, setIsScrolled] = useState(false)
+  const navRef = useRef<HTMLElement>(null)
+  const [navHeight, setNavHeight] = useState(65)
   const pathname = usePathname()
   const router = useRouter()
   const { user, student, isLoading, signOut } = useAuth()
@@ -29,6 +31,13 @@ export default function MainNavigation() {
     await signOut()
     router.push("/")
   }
+
+  // Measure nav height for mobile menu positioning
+  useEffect(() => {
+    if (navRef.current) {
+      setNavHeight(navRef.current.offsetHeight)
+    }
+  }, [isScrolled])
 
   // Handle scroll detection for sticky nav
   useEffect(() => {
@@ -77,6 +86,7 @@ export default function MainNavigation() {
 
   return (
     <nav
+      ref={navRef}
       className={`nav-sticky bg-white py-3 ${
         isScrolled ? "nav-scrolled" : "shadow-sm"
       }`}
@@ -210,154 +220,158 @@ export default function MainNavigation() {
           </div>
         </div>
 
-        {/* Mobile Navigation */}
-        {isMenuOpen && (
-          <div className="lg:hidden fixed inset-0 top-[73px] bg-white z-40 mobile-menu-enter">
-            <div className="flex flex-col h-full">
-              <div className="flex flex-col p-6 space-y-2">
-                <Link
-                  href="/"
-                  className={`nav-link text-lg py-3 px-4 rounded-lg hover:bg-gray-50 transition-colors ${
-                    isActive("/") ? "text-primary bg-primary/5" : ""
-                  }`}
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  Home
-                </Link>
-                <Link
-                  href="/about"
-                  className={`nav-link text-lg py-3 px-4 rounded-lg hover:bg-gray-50 transition-colors ${
-                    isActive("/about") ? "text-primary bg-primary/5" : ""
-                  }`}
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  About Us
-                </Link>
-                <Link
-                  href="/scholars"
-                  className={`nav-link text-lg py-3 px-4 rounded-lg hover:bg-gray-50 transition-colors ${
-                    isActive("/scholars") ? "text-primary bg-primary/5" : ""
-                  }`}
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  Our Scholars
-                </Link>
-                <Link
-                  href="/gallery"
-                  className={`nav-link text-lg py-3 px-4 rounded-lg hover:bg-gray-50 transition-colors ${
-                    isActive("/gallery") ? "text-primary bg-primary/5" : ""
-                  }`}
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  Gallery
-                </Link>
-                <Link
-                  href="/media"
-                  className={`nav-link text-lg py-3 px-4 rounded-lg hover:bg-gray-50 transition-colors ${
-                    isActive("/media") ? "text-primary bg-primary/5" : ""
-                  }`}
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  In the Media
-                </Link>
-                <Link
-                  href="/spotlight"
-                  className={`nav-link text-lg py-3 px-4 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 ${
-                    isActive("/spotlight") ? "text-primary bg-primary/5" : ""
-                  }`}
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  <Star className="w-5 h-5" />
-                  Spotlight
-                </Link>
+      </div>
 
-                {/* Mobile CTAs */}
-                <div className="pt-6 space-y-3 border-t mt-4">
-                  <Link href="/apply" className="block" onClick={() => setIsMenuOpen(false)}>
-                    <Button
-                      variant="outline"
-                      className="w-full cta-secondary flex items-center justify-center gap-2 py-6 text-base"
-                    >
-                      <GraduationCap className="w-5 h-5" />
-                      Apply for Scholarship
-                    </Button>
-                  </Link>
-                  <Link href="/donate" className="block" onClick={() => setIsMenuOpen(false)}>
-                    <Button className="w-full cta-primary flex items-center justify-center gap-2 py-6 text-base">
-                      <Heart className="w-5 h-5" />
-                      Donate Now
-                    </Button>
-                  </Link>
-                </div>
+      {/* Mobile Navigation — rendered outside the container for full-width coverage */}
+      {isMenuOpen && (
+        <div
+          className="lg:hidden fixed inset-x-0 bottom-0 bg-white z-50 mobile-menu-enter"
+          style={{ top: `${navHeight}px` }}
+        >
+          <div className="flex flex-col h-full overflow-y-auto">
+            <div className="flex flex-col p-6 space-y-2">
+              <Link
+                href="/"
+                className={`nav-link text-lg py-3 px-4 rounded-lg hover:bg-gray-50 transition-colors ${
+                  isActive("/") ? "text-primary bg-primary/5" : ""
+                }`}
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Home
+              </Link>
+              <Link
+                href="/about"
+                className={`nav-link text-lg py-3 px-4 rounded-lg hover:bg-gray-50 transition-colors ${
+                  isActive("/about") ? "text-primary bg-primary/5" : ""
+                }`}
+                onClick={() => setIsMenuOpen(false)}
+              >
+                About Us
+              </Link>
+              <Link
+                href="/scholars"
+                className={`nav-link text-lg py-3 px-4 rounded-lg hover:bg-gray-50 transition-colors ${
+                  isActive("/scholars") ? "text-primary bg-primary/5" : ""
+                }`}
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Our Scholars
+              </Link>
+              <Link
+                href="/gallery"
+                className={`nav-link text-lg py-3 px-4 rounded-lg hover:bg-gray-50 transition-colors ${
+                  isActive("/gallery") ? "text-primary bg-primary/5" : ""
+                }`}
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Gallery
+              </Link>
+              <Link
+                href="/media"
+                className={`nav-link text-lg py-3 px-4 rounded-lg hover:bg-gray-50 transition-colors ${
+                  isActive("/media") ? "text-primary bg-primary/5" : ""
+                }`}
+                onClick={() => setIsMenuOpen(false)}
+              >
+                In the Media
+              </Link>
+              <Link
+                href="/spotlight"
+                className={`nav-link text-lg py-3 px-4 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 ${
+                  isActive("/spotlight") ? "text-primary bg-primary/5" : ""
+                }`}
+                onClick={() => setIsMenuOpen(false)}
+              >
+                <Star className="w-5 h-5" />
+                Spotlight
+              </Link>
 
-                {/* Mobile Auth Section */}
-                <div className={`pt-6 space-y-3 border-t mt-4 ${showAuth ? '' : 'hidden'}`}>
-                    {user ? (
-                      <>
-                        <div className="flex items-center gap-3 px-4 py-2 bg-gray-50 rounded-lg">
-                          <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
-                            <User className="w-5 h-5 text-primary" />
-                          </div>
-                          <div>
-                            <p className="font-medium text-gray-900">
-                              {student?.full_name || "Student"}
-                            </p>
-                            <p className="text-sm text-gray-500">{user.email}</p>
-                          </div>
-                        </div>
-                        <Link href="/dashboard" className="block" onClick={() => setIsMenuOpen(false)}>
-                          <Button
-                            variant="outline"
-                            className="w-full flex items-center justify-center gap-2 py-5"
-                          >
-                            <LayoutDashboard className="w-5 h-5" />
-                            Dashboard
-                          </Button>
-                        </Link>
-                        <Button
-                          variant="ghost"
-                          onClick={() => {
-                            handleSignOut()
-                            setIsMenuOpen(false)
-                          }}
-                          className="w-full flex items-center justify-center gap-2 py-5 text-red-600 hover:text-red-700 hover:bg-red-50"
-                        >
-                          <LogOut className="w-5 h-5" />
-                          Sign Out
-                        </Button>
-                      </>
-                    ) : (
-                      <>
-                        <Link href="/login" className="block" onClick={() => setIsMenuOpen(false)}>
-                          <Button
-                            variant="outline"
-                            className="w-full flex items-center justify-center gap-2 py-5"
-                          >
-                            <LogIn className="w-5 h-5" />
-                            Login
-                          </Button>
-                        </Link>
-                        <Link href="/register" className="block" onClick={() => setIsMenuOpen(false)}>
-                          <Button className="w-full flex items-center justify-center gap-2 py-5 bg-primary">
-                            <User className="w-5 h-5" />
-                            Create Account
-                          </Button>
-                        </Link>
-                      </>
-                    )}
-                </div>
+              {/* Mobile CTAs */}
+              <div className="pt-6 space-y-3 border-t mt-4">
+                <Link href="/apply" className="block" onClick={() => setIsMenuOpen(false)}>
+                  <Button
+                    variant="outline"
+                    className="w-full cta-secondary flex items-center justify-center gap-2 py-6 text-base"
+                  >
+                    <GraduationCap className="w-5 h-5" />
+                    Apply for Scholarship
+                  </Button>
+                </Link>
+                <Link href="/donate" className="block" onClick={() => setIsMenuOpen(false)}>
+                  <Button className="w-full cta-primary flex items-center justify-center gap-2 py-6 text-base">
+                    <Heart className="w-5 h-5" />
+                    Donate Now
+                  </Button>
+                </Link>
               </div>
 
-              {/* Mobile footer info */}
-              <div className="mt-auto p-6 bg-gray-50 border-t">
-                <p className="text-sm text-gray-600 text-center">
-                  Empowering students through education since 2023
-                </p>
+              {/* Mobile Auth Section */}
+              <div className={`pt-6 space-y-3 border-t mt-4 ${showAuth ? '' : 'hidden'}`}>
+                {user ? (
+                  <>
+                    <div className="flex items-center gap-3 px-4 py-2 bg-gray-50 rounded-lg">
+                      <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
+                        <User className="w-5 h-5 text-primary" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900">
+                          {student?.full_name || "Student"}
+                        </p>
+                        <p className="text-sm text-gray-500">{user.email}</p>
+                      </div>
+                    </div>
+                    <Link href="/dashboard" className="block" onClick={() => setIsMenuOpen(false)}>
+                      <Button
+                        variant="outline"
+                        className="w-full flex items-center justify-center gap-2 py-5"
+                      >
+                        <LayoutDashboard className="w-5 h-5" />
+                        Dashboard
+                      </Button>
+                    </Link>
+                    <Button
+                      variant="ghost"
+                      onClick={() => {
+                        handleSignOut()
+                        setIsMenuOpen(false)
+                      }}
+                      className="w-full flex items-center justify-center gap-2 py-5 text-red-600 hover:text-red-700 hover:bg-red-50"
+                    >
+                      <LogOut className="w-5 h-5" />
+                      Sign Out
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Link href="/login" className="block" onClick={() => setIsMenuOpen(false)}>
+                      <Button
+                        variant="outline"
+                        className="w-full flex items-center justify-center gap-2 py-5"
+                      >
+                        <LogIn className="w-5 h-5" />
+                        Login
+                      </Button>
+                    </Link>
+                    <Link href="/register" className="block" onClick={() => setIsMenuOpen(false)}>
+                      <Button className="w-full flex items-center justify-center gap-2 py-5 bg-primary">
+                        <User className="w-5 h-5" />
+                        Create Account
+                      </Button>
+                    </Link>
+                  </>
+                )}
               </div>
             </div>
+
+            {/* Mobile footer info */}
+            <div className="mt-auto p-6 bg-gray-50 border-t">
+              <p className="text-sm text-gray-600 text-center">
+                Empowering students through education since 2023
+              </p>
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </nav>
   )
 }
