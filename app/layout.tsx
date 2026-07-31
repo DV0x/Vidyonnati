@@ -1,6 +1,8 @@
 import "./globals.css"
 import "./styles/grid-pattern.css"
 import { Overpass } from "next/font/google"
+import { ClerkProvider } from "@clerk/nextjs"
+import { ConvexClientProvider } from "./ConvexClientProvider"
 import LayoutWrapper from "./components/LayoutWrapper"
 import { DonorProvider } from "./context/DonorContext"
 import { AuthProvider } from "./context/AuthContext"
@@ -82,11 +84,18 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={overpass.className}>
-        <AuthProvider>
-          <DonorProvider>
-            <LayoutWrapper>{children}</LayoutWrapper>
-          </DonorProvider>
-        </AuthProvider>
+        {/* ClerkProvider supplies identity; ConvexClientProvider forwards the
+            Clerk JWT to Convex, so it must sit inside ClerkProvider.
+            AuthProvider still reads Supabase — it is rewritten next. */}
+        <ClerkProvider>
+          <ConvexClientProvider>
+            <AuthProvider>
+              <DonorProvider>
+                <LayoutWrapper>{children}</LayoutWrapper>
+              </DonorProvider>
+            </AuthProvider>
+          </ConvexClientProvider>
+        </ClerkProvider>
         <Toaster />
       </body>
     </html>

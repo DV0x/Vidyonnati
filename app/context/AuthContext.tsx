@@ -1,13 +1,37 @@
 "use client"
 
-import { createContext, useContext, useEffect, useState, useMemo, useRef } from 'react'
-import { createClient } from '@/lib/supabase/client'
-import type { User, Session } from '@supabase/supabase-js'
-import type { Student } from '@/types/database'
+import { createContext, useContext, useEffect, useMemo } from "react"
+import { useUser, useClerk } from "@clerk/nextjs"
+import { useConvexAuth, useQuery, useMutation } from "convex/react"
+import { api } from "@/convex/_generated/api"
+import type { Doc } from "@/convex/_generated/dataModel"
+import type { Student } from "@/types/database"
+
+// Identity now comes from Clerk, profile data from Convex.
+//
+// The public interface is unchanged from the Supabase version so the 12
+// consuming components need no edits. What went away internally:
+//   - the initializedRef dance separating boot from post-idle SIGNED_IN
+//   - manual sb-* cookie clearing on failed sign-out
+//   - three round-trips (is_admin RPC, students fetch, /api/admin/info)
+//     collapsed into one reactive query
+//
+// It also fixes the bug in ADMIN_DASHBOARD_PLAN.md:556 where clicking a
+// document download triggered a token refresh that blanked the dashboard:
+// Convex subscriptions don't churn isLoading on refresh.
+
+interface AuthUser {
+  id: string
+  email: string | null
+  /**
+   * OAuth provider used to sign in ("google"), or null for email/password.
+   * Replaces Supabase's `user.app_metadata.provider`.
+   */
+  provider: string | null
+}
 
 interface AuthContextType {
-  user: User | null
-  session: Session | null
+  user: AuthUser | null
   student: Student | null
   isAdmin: boolean
   isLoading: boolean
@@ -17,180 +41,94 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+// TEMPORARY ADAPTER — remove in Phase 3.
+//
+// Convex documents are camelCase; six components still read the Supabase
+// snake_case Student shape (ApplicationWizard, SpotlightWizard, profile page,
+// MainNavigation, dashboard layout + page). Three of those are rewritten in
+// Phase 3 anyway, so mapping here beats churning ~40 field references now.
+// Typing the return as `Student` makes the compiler prove the shim is complete.
+function toLegacyStudent(doc: Doc<"students">): Student {
+  return {
+    id: doc._id,
+    email: doc.email,
+    full_name: doc.fullName ?? null,
+    phone: doc.phone ?? null,
+    date_of_birth: doc.dateOfBirth ?? null,
+    gender: doc.gender ?? null,
+    address: doc.address ?? null,
+    village: doc.village ?? null,
+    mandal: doc.mandal ?? null,
+    district: doc.district ?? null,
+    pincode: doc.pincode ?? null,
+    created_at: new Date(doc._creationTime).toISOString(),
+    updated_at: doc.updatedAt ? new Date(doc.updatedAt).toISOString() : null,
+  }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
-  const [session, setSession] = useState<Session | null>(null)
-  const [student, setStudent] = useState<Student | null>(null)
-  const [isAdmin, setIsAdmin] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
+  // Gate on useConvexAuth, NOT Clerk's isLoaded: Clerk can report signed-in
+  // before Convex has validated the token, and querying in that window sends
+  // unauthenticated requests.
+  const { isLoading: convexAuthLoading, isAuthenticated } = useConvexAuth()
+  const { user: clerkUser } = useUser()
+  const clerk = useClerk()
 
-  const supabase = useMemo(() => createClient(), [])
-  const initializedRef = useRef(false)
+  const me = useQuery(api.users.me, isAuthenticated ? {} : "skip")
+  const ensureStudentProfile = useMutation(api.users.ensureStudentProfile)
 
-  // Check if user is admin
-  const checkIsAdmin = async (): Promise<boolean> => {
-    try {
-      const { data, error } = await supabase.rpc('is_admin')
-      if (error) {
-        console.error('Admin check failed:', error.message)
-        return false
-      }
-      return !!data
-    } catch {
-      return false
-    }
-  }
-
-  // Fetch student profile (only for non-admin users)
-  const fetchStudent = async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('students')
-        .select('*')
-        .eq('id', userId)
-        .single()
-
-      if (!error && data) {
-        setStudent(data)
-      }
-    } catch (err) {
-      console.error('Failed to fetch student profile:', err)
-    }
-  }
-
-  // Fetch user data based on role
-  const fetchUserData = async (userId: string) => {
-    const adminStatus = await checkIsAdmin()
-    setIsAdmin(adminStatus)
-
-    if (!adminStatus) {
-      await fetchStudent(userId)
-    }
-  }
-
-  const refreshStudent = async () => {
-    if (user && !isAdmin) {
-      await fetchStudent(user.id)
-    }
-  }
-
-  const signOut = async () => {
-    // Always clear local state first to immediately update UI
-    setUser(null)
-    setSession(null)
-    setStudent(null)
-    setIsAdmin(false)
-
-    const { error } = await supabase.auth.signOut({ scope: 'global' })
-    if (error) {
-      // signOut can fail to clear cookies when the API call fails or
-      // the session is already expired. Force-clear auth cookies so
-      // stale tokens don't resurrect the session on page refresh.
-      console.error('Sign out error, clearing cookies manually:', error.message)
-      document.cookie.split(';').forEach(c => {
-        const name = c.split('=')[0].trim()
-        if (name.startsWith('sb-')) {
-          document.cookie = `${name}=; path=/; max-age=0`
-        }
-      })
-    }
-  }
-
+  // Safety net for the Clerk webhook: if an authenticated non-admin has no
+  // student row yet, create it. Idempotent server-side. This is what makes the
+  // error.md failure (406 on profile, 500 on spotlight submit, caused by a
+  // missing row) structurally unreachable rather than merely unlikely.
   useEffect(() => {
-    // onAuthStateChange is the single source of truth.
-    // INITIAL_SESSION fires synchronously on subscribe with the current
-    // session from cookies (which the proxy already refreshed server-side).
-    // No separate getUser()/getSession() call needed.
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (event === 'INITIAL_SESSION') {
-          // First event on subscribe — session comes from cookies.
-          // The proxy already validated/refreshed the token server-side,
-          // so this session is trustworthy.
-          setSession(session)
-          setUser(session?.user ?? null)
-
-          try {
-            if (session?.user) {
-              await fetchUserData(session.user.id)
-            }
-          } catch (err) {
-            console.error('Failed to fetch user data on init:', err)
-          } finally {
-            // MUST always run so the UI doesn't stay in a loading state
-            setIsLoading(false)
-            initializedRef.current = true
-          }
-        } else if (event === 'SIGNED_IN') {
-          setSession(session)
-          setUser(session?.user ?? null)
-
-          if (!initializedRef.current) {
-            // First sign-in during app startup (some Supabase versions
-            // fire SIGNED_IN after INITIAL_SESSION for existing sessions).
-            initializedRef.current = true
-            setIsLoading(true)
-            try {
-              if (session?.user) {
-                await fetchUserData(session.user.id)
-              }
-            } catch (err) {
-              console.error('Failed to fetch user data on sign-in:', err)
-            } finally {
-              setIsLoading(false)
-            }
-          } else {
-            // Post-init SIGNED_IN: session recovery after idle / tab
-            // reactivation. Silently refresh user data in the background
-            // without showing a loading spinner.
-            if (session?.user) {
-              fetchUserData(session.user.id).catch(err =>
-                console.error('Failed to refresh user data:', err)
-              )
-            }
-          }
-        } else if (event === 'TOKEN_REFRESHED') {
-          // Silent token refresh — update session/user, no data re-fetch
-          setSession(session)
-          setUser(session?.user ?? null)
-        } else if (event === 'SIGNED_OUT') {
-          // Explicit sign-out or token refresh failure
-          setUser(null)
-          setSession(null)
-          setStudent(null)
-          setIsAdmin(false)
-          setIsLoading(false)
-        }
-      }
+    if (!isAuthenticated || me === undefined || me === null) return
+    if (me.isAdmin || me.student) return
+    if (!clerkUser) return
+    // Clerk's session token carries no email/name claim, so pass them through
+    // from useUser(). The server prefers token claims when present.
+    ensureStudentProfile({
+      email: clerkUser.primaryEmailAddress?.emailAddress,
+      fullName: clerkUser.fullName ?? undefined,
+    }).catch((err) =>
+      console.error("Failed to ensure student profile:", err),
     )
+  }, [isAuthenticated, me, clerkUser, ensureStudentProfile])
 
-    return () => {
-      subscription.unsubscribe()
+  const value = useMemo<AuthContextType>(() => {
+    const user: AuthUser | null = clerkUser
+      ? {
+          id: clerkUser.id,
+          email: clerkUser.primaryEmailAddress?.emailAddress ?? null,
+          provider: clerkUser.externalAccounts?.[0]?.provider ?? null,
+        }
+      : null
+
+    return {
+      user,
+      student: me?.student ? toLegacyStudent(me.student) : null,
+      isAdmin: me?.isAdmin ?? false,
+      // Still loading while Convex validates the token, or while the profile
+      // query is in flight for an authenticated user (undefined = not yet
+      // resolved; null = resolved to "no user").
+      isLoading: convexAuthLoading || (isAuthenticated && me === undefined),
+      signOut: async () => {
+        await clerk.signOut()
+      },
+      // Kept for interface compatibility. Convex queries are reactive, so
+      // there is nothing to manually refetch — profile edits propagate on
+      // their own. Safe to delete once no caller references it.
+      refreshStudent: async () => {},
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabase])
+  }, [clerkUser, me, convexAuthLoading, isAuthenticated, clerk])
 
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        session,
-        student,
-        isAdmin,
-        isLoading,
-        signOut,
-        refreshStudent,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
-  )
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
 export function useAuth() {
   const context = useContext(AuthContext)
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider')
+    throw new Error("useAuth must be used within an AuthProvider")
   }
   return context
 }

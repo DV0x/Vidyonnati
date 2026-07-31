@@ -54,14 +54,14 @@ export async function GET(request: NextRequest) {
   const limit = limitParam ? parseInt(limitParam, 10) : null
 
   // Fetch featured spotlight applications
-  let spotlightQuery = supabaseAdmin
+  const spotlightQuery = supabaseAdmin
     .from('spotlight_applications')
     .select('id, full_name, gender, course_stream, district, dreams_goals, background_story, annual_financial_need, competitive_exams, percentage, featured_order')
     .eq('is_featured', true)
     .order('featured_order', { ascending: true, nullsFirst: false })
 
   // Fetch featured scholarship applications
-  let scholarshipQuery = supabaseAdmin
+  const scholarshipQuery = supabaseAdmin
     .from('applications')
     .select('id, full_name, gender, course_joined, course_studying, district, goals_dreams, spotlight_story, spotlight_annual_need, ssc_percentage, first_year_percentage, spotlight_order')
     .eq('spotlight_enabled', true)

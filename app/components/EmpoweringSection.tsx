@@ -25,7 +25,7 @@ export default function EmpoweringSection() {
                 transition={{ duration: 0.8, delay: 0.2 }}
                 viewport={{ once: true }}
               >
-                Empowering <span className="text-primary">Rural Andhra Pradesh's</span> Future Leaders
+                Empowering <span className="text-primary">Rural Andhra Pradesh’s</span> Future Leaders
               </motion.h2>
               <motion.div
                 className="w-20 h-1 bg-primary mx-auto"

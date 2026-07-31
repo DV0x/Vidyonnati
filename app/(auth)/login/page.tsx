@@ -4,17 +4,19 @@ import { useState, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { motion } from "motion/react"
-import { createClient } from "@/lib/supabase/client"
+import { useSignIn } from "@clerk/nextjs"
 import { Button } from "@/components/ui/button"
 import { AnimatedInput } from "@/app/components/AnimatedInput"
 import { toast } from "@/hooks/use-toast"
-import { Loader2, Mail, Eye, EyeOff } from "lucide-react"
+import { Loader2, Mail, Eye, EyeOff, ShieldCheck } from "lucide-react"
 
 function LoginContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const redirectTo = searchParams.get("redirect") || "/dashboard"
   const errorParam = searchParams.get("error")
+
+  const { signIn, errors: clerkErrors } = useSignIn()
 
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -23,9 +25,13 @@ function LoginContent() {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({})
 
-  const supabase = createClient()
+  // Clerk can require a second step even without MFA configured: signing in
+  // from a new device yields status 'needs_client_trust'. Without this branch
+  // the user would be stuck on a form that silently does nothing.
+  const [needsCode, setNeedsCode] = useState(false)
+  const [code, setCode] = useState("")
 
-  // Show error from OAuth callback
+  // Show error from the SSO callback
   if (errorParam === "auth_failed") {
     toast({
       title: "Authentication Failed",
@@ -53,6 +59,33 @@ function LoginContent() {
     return Object.keys(newErrors).length === 0
   }
 
+  const completeSignIn = async () => {
+    await signIn.finalize({
+      navigate: ({ session, decorateUrl }) => {
+        if (session?.currentTask) {
+          // A pending Clerk task (e.g. org selection) blocks the session.
+          // None are configured for this app; surface it rather than hang.
+          console.warn("Sign-in blocked by pending task:", session.currentTask)
+          toast({
+            title: "Additional step required",
+            description: "Your account needs another step before continuing.",
+            variant: "destructive",
+          })
+          setIsLoading(false)
+          return
+        }
+
+        const url = decorateUrl(redirectTo)
+        // decorateUrl may return an absolute URL to work around Safari ITP.
+        if (url.startsWith("http")) {
+          window.location.href = url
+        } else {
+          router.push(url)
+        }
+      },
+    })
+  }
+
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -61,30 +94,54 @@ function LoginContent() {
     setIsLoading(true)
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
+      const { error } = await signIn.password({ identifier: email, password })
 
       if (error) {
         toast({
           title: "Login Failed",
-          description: error.message === "Invalid login credentials"
-            ? "Invalid email or password. Please try again."
-            : error.message,
+          description:
+            clerkErrors?.fields?.identifier?.message ||
+            clerkErrors?.fields?.password?.message ||
+            "Invalid email or password. Please try again.",
           variant: "destructive",
         })
         setIsLoading(false)
         return
       }
 
-      toast({
-        title: "Welcome back!",
-        description: "You have been signed in successfully.",
-      })
+      if (
+        signIn.status === "needs_client_trust" ||
+        signIn.status === "needs_second_factor"
+      ) {
+        const { error: sendError } = await signIn.mfa.sendEmailCode()
+        if (sendError) {
+          toast({
+            title: "Verification Failed",
+            description: "Could not send a verification code. Please try again.",
+            variant: "destructive",
+          })
+          setIsLoading(false)
+          return
+        }
+        setNeedsCode(true)
+        setIsLoading(false)
+        toast({
+          title: "Check your email",
+          description: "We sent you a verification code to finish signing in.",
+        })
+        return
+      }
 
-      router.push(redirectTo)
-      router.refresh()
+      if (signIn.status === "complete") {
+        toast({
+          title: "Welcome back!",
+          description: "You have been signed in successfully.",
+        })
+        await completeSignIn()
+        return
+      }
+
+      setIsLoading(false)
     } catch (err) {
       console.error("Login error:", err)
       toast({
@@ -96,23 +153,46 @@ function LoginContent() {
     }
   }
 
+  const handleVerifyCode = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!code.trim()) return
+
+    setIsLoading(true)
+    const { error } = await signIn.mfa.verifyEmailCode({ code: code.trim() })
+
+    if (error) {
+      toast({
+        title: "Invalid Code",
+        description:
+          clerkErrors?.fields?.code?.message ||
+          "That code didn't work. Please try again.",
+        variant: "destructive",
+      })
+      setIsLoading(false)
+      return
+    }
+
+    if (signIn.status === "complete") {
+      await completeSignIn()
+      return
+    }
+
+    setIsLoading(false)
+  }
+
   const handleGoogleLogin = async () => {
     setIsGoogleLoading(true)
 
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/callback?next=${redirectTo}`,
-        queryParams: {
-          prompt: 'select_account', // Force account selection on every login
-        },
-      },
+    const { error } = await signIn.sso({
+      strategy: "oauth_google",
+      redirectUrl: redirectTo,
+      redirectCallbackUrl: "/sso-callback",
     })
 
     if (error) {
       toast({
         title: "Google Sign-in Failed",
-        description: error.message,
+        description: "Could not start Google sign-in. Please try again.",
         variant: "destructive",
       })
       setIsGoogleLoading(false)
@@ -140,151 +220,199 @@ function LoginContent() {
               <h2 className="text-2xl font-bold text-primary">Vidyonnati</h2>
             </Link>
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
-              Welcome Back
+              {needsCode ? "Verify It's You" : "Welcome Back"}
             </h1>
             <p className="text-gray-500 mt-2 text-sm sm:text-base">
-              Sign in to continue your scholarship journey
+              {needsCode
+                ? `Enter the code we sent to ${email}`
+                : "Sign in to continue your scholarship journey"}
             </p>
           </div>
 
           {/* Form Card */}
           <div className="bg-white/80 backdrop-blur-xl rounded-2xl border border-white/50 shadow-xl p-5 sm:p-6">
-            <form onSubmit={handleEmailLogin} className="space-y-4">
-              {/* Email */}
-              <div>
+            {needsCode ? (
+              <form onSubmit={handleVerifyCode} className="space-y-4">
                 <AnimatedInput
-                  type="email"
-                  label="Email Address"
-                  value={email}
-                  onChange={(e) => {
-                    setEmail(e.target.value)
-                    setErrors({ ...errors, email: undefined })
-                  }}
-                  disabled={isLoading || isGoogleLoading}
+                  type="text"
+                  label="Verification Code"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  disabled={isLoading}
                 />
-                {errors.email && (
-                  <p className="text-red-500 text-xs mt-1">{errors.email}</p>
-                )}
-              </div>
 
-              {/* Password */}
-              <div>
-                <div className="relative">
-                  <AnimatedInput
-                    type={showPassword ? "text" : "password"}
-                    label="Password"
-                    value={password}
-                    onChange={(e) => {
-                      setPassword(e.target.value)
-                      setErrors({ ...errors, password: undefined })
-                    }}
-                    disabled={isLoading || isGoogleLoading}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  >
-                    {showPassword ? (
-                      <EyeOff className="w-5 h-5" />
-                    ) : (
-                      <Eye className="w-5 h-5" />
-                    )}
-                  </button>
-                </div>
-                {errors.password && (
-                  <p className="text-red-500 text-xs mt-1">{errors.password}</p>
-                )}
-              </div>
-
-              {/* Forgot Password */}
-              <div className="text-right">
-                <Link
-                  href="/forgot-password"
-                  className="text-sm text-primary hover:underline"
+                <Button
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full py-6 text-base font-semibold bg-gradient-to-r from-primary to-orange-500 hover:from-primary/90 hover:to-orange-500/90 rounded-xl shadow-lg shadow-primary/20 transition-all hover:shadow-xl hover:shadow-primary/25 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
                 >
-                  Forgot password?
-                </Link>
-              </div>
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                      Verifying...
+                    </>
+                  ) : (
+                    <>
+                      <ShieldCheck className="w-5 h-5 mr-2" />
+                      Verify &amp; Continue
+                    </>
+                  )}
+                </Button>
 
-              {/* Submit Button */}
-              <Button
-                type="submit"
-                disabled={isLoading || isGoogleLoading}
-                className="w-full py-6 text-base font-semibold bg-gradient-to-r from-primary to-orange-500 hover:from-primary/90 hover:to-orange-500/90 rounded-xl shadow-lg shadow-primary/20 transition-all hover:shadow-xl hover:shadow-primary/25 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                    Signing in...
-                  </>
-                ) : (
-                  <>
-                    <Mail className="w-5 h-5 mr-2" />
-                    Sign in with Email
-                  </>
-                )}
-              </Button>
-            </form>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNeedsCode(false)
+                    setCode("")
+                    signIn.reset()
+                  }}
+                  className="w-full text-sm text-gray-500 hover:text-primary transition-colors"
+                >
+                  ← Use a different account
+                </button>
+              </form>
+            ) : (
+              <>
+                <form onSubmit={handleEmailLogin} className="space-y-4">
+                  {/* Email */}
+                  <div>
+                    <AnimatedInput
+                      type="email"
+                      label="Email Address"
+                      value={email}
+                      onChange={(e) => {
+                        setEmail(e.target.value)
+                        setErrors({ ...errors, email: undefined })
+                      }}
+                      disabled={isLoading || isGoogleLoading}
+                    />
+                    {errors.email && (
+                      <p className="text-red-500 text-xs mt-1">{errors.email}</p>
+                    )}
+                  </div>
 
-            {/* Divider */}
-            <div className="relative my-6">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-200"></div>
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="bg-white px-4 text-gray-500">or continue with</span>
-              </div>
-            </div>
+                  {/* Password */}
+                  <div>
+                    <div className="relative">
+                      <AnimatedInput
+                        type={showPassword ? "text" : "password"}
+                        label="Password"
+                        value={password}
+                        onChange={(e) => {
+                          setPassword(e.target.value)
+                          setErrors({ ...errors, password: undefined })
+                        }}
+                        disabled={isLoading || isGoogleLoading}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      >
+                        {showPassword ? (
+                          <EyeOff className="w-5 h-5" />
+                        ) : (
+                          <Eye className="w-5 h-5" />
+                        )}
+                      </button>
+                    </div>
+                    {errors.password && (
+                      <p className="text-red-500 text-xs mt-1">{errors.password}</p>
+                    )}
+                  </div>
 
-            {/* Google Sign In */}
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleGoogleLogin}
-              disabled={isLoading || isGoogleLoading}
-              className="w-full py-6 text-base font-medium border-2 rounded-xl hover:bg-gray-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isGoogleLoading ? (
-                <>
-                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                  Connecting...
-                </>
-              ) : (
-                <>
-                  <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
-                    <path
-                      fill="currentColor"
-                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                    />
-                    <path
-                      fill="currentColor"
-                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                    />
-                    <path
-                      fill="currentColor"
-                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                    />
-                    <path
-                      fill="currentColor"
-                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                    />
-                  </svg>
-                  Continue with Google
-                </>
-              )}
-            </Button>
+                  {/* Forgot Password */}
+                  <div className="text-right">
+                    <Link
+                      href="/forgot-password"
+                      className="text-sm text-primary hover:underline"
+                    >
+                      Forgot password?
+                    </Link>
+                  </div>
 
-            {/* Register Link */}
-            <p className="text-center text-sm text-gray-600 mt-6">
-              Don't have an account?{" "}
-              <Link
-                href={`/register${redirectTo !== "/dashboard" ? `?redirect=${redirectTo}` : ""}`}
-                className="text-primary font-semibold hover:underline"
-              >
-                Register now
-              </Link>
-            </p>
+                  {/* Submit Button */}
+                  <Button
+                    type="submit"
+                    disabled={isLoading || isGoogleLoading}
+                    className="w-full py-6 text-base font-semibold bg-gradient-to-r from-primary to-orange-500 hover:from-primary/90 hover:to-orange-500/90 rounded-xl shadow-lg shadow-primary/20 transition-all hover:shadow-xl hover:shadow-primary/25 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                        Signing in...
+                      </>
+                    ) : (
+                      <>
+                        <Mail className="w-5 h-5 mr-2" />
+                        Sign in with Email
+                      </>
+                    )}
+                  </Button>
+                </form>
+
+                {/* Divider */}
+                <div className="relative my-6">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-gray-200"></div>
+                  </div>
+                  <div className="relative flex justify-center text-sm">
+                    <span className="bg-white px-4 text-gray-500">
+                      or continue with
+                    </span>
+                  </div>
+                </div>
+
+                {/* Google Sign In */}
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleGoogleLogin}
+                  disabled={isLoading || isGoogleLoading}
+                  className="w-full py-6 text-base font-medium border-2 rounded-xl hover:bg-gray-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isGoogleLoading ? (
+                    <>
+                      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                      Connecting...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
+                        <path
+                          fill="currentColor"
+                          d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                        />
+                        <path
+                          fill="currentColor"
+                          d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                        />
+                        <path
+                          fill="currentColor"
+                          d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                        />
+                        <path
+                          fill="currentColor"
+                          d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                        />
+                      </svg>
+                      Continue with Google
+                    </>
+                  )}
+                </Button>
+
+                {/* Register Link */}
+                <p className="text-center text-sm text-gray-600 mt-6">
+                  Don&rsquo;t have an account?{" "}
+                  <Link
+                    href={`/register${redirectTo !== "/dashboard" ? `?redirect=${redirectTo}` : ""}`}
+                    className="text-primary font-semibold hover:underline"
+                  >
+                    Register now
+                  </Link>
+                </p>
+              </>
+            )}
           </div>
 
           {/* Back to Home */}

@@ -388,7 +388,7 @@ export default function ProfilePage() {
               <div>
                 <p className="font-medium text-gray-900">Sign-in Method</p>
                 <p className="text-sm text-gray-500">
-                  {user?.app_metadata?.provider === 'google'
+                  {user?.provider === 'google'
                     ? 'Signed in with Google'
                     : 'Signed in with Email/Password'}
                 </p>

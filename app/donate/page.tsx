@@ -150,7 +150,7 @@ export default function DonatePage() {
               Donate to Educate
             </h1>
             <p className="text-gray-500 mt-2 text-sm sm:text-base">
-              Your contribution changes a student's life
+              Your contribution changes a student’s life
             </p>
           </div>
 
