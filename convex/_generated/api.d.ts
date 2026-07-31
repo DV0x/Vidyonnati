@@ -8,7 +8,13 @@
  * @module
  */
 
+import type * as admin from "../admin.js";
+import type * as applications from "../applications.js";
+import type * as featured from "../featured.js";
 import type * as lib_auth from "../lib/auth.js";
+import type * as lib_counters from "../lib/counters.js";
+import type * as lib_search from "../lib/search.js";
+import type * as spotlight from "../spotlight.js";
 import type * as users from "../users.js";
 
 import type {
@@ -18,7 +24,13 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  admin: typeof admin;
+  applications: typeof applications;
+  featured: typeof featured;
   "lib/auth": typeof lib_auth;
+  "lib/counters": typeof lib_counters;
+  "lib/search": typeof lib_search;
+  spotlight: typeof spotlight;
   users: typeof users;
 }>;
 

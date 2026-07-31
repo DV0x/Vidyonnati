@@ -157,6 +157,9 @@ export default defineSchema({
     .index("by_studentId", ["studentId"])
     .index("by_status", ["status"])
     .index("by_applicationId", ["applicationId"])
+    // The admin list can filter by type with no status selected. Without this
+    // that combination degrades to a full scan filtered after the fact.
+    .index("by_applicationType", ["applicationType"])
     .index("by_spotlightEnabled_and_spotlightOrder", [
       "spotlightEnabled",
       "spotlightOrder",
@@ -281,10 +284,18 @@ export default defineSchema({
     .index("by_studentId", ["studentId"])
     .index("by_status", ["status"])
     .index("by_spotlightId", ["spotlightId"])
+    // Two indexes on isFeatured, for two different orderings. The _and_
+    // featuredOrder one drives the public/admin featured lists, which are
+    // ranked by display order. This one is (isFeatured, _creationTime), for the
+    // admin review list, which is ranked newest-first like its sibling filters.
+    .index("by_isFeatured", ["isFeatured"])
     .index("by_isFeatured_and_featuredOrder", ["isFeatured", "featuredOrder"])
+    // isFeatured is a filter field because the admin list combines a text
+    // search with the featured/not-featured toggle, and a search index can
+    // only narrow on fields declared here.
     .searchIndex("search_all", {
       searchField: "searchText",
-      filterFields: ["status"],
+      filterFields: ["status", "isFeatured"],
     }),
 
   spotlightDocuments: defineTable({
@@ -329,9 +340,17 @@ export default defineSchema({
     confirmedAt: v.optional(v.number()),
     notes: v.optional(v.string()),
     updatedAt: v.optional(v.number()),
+
+    // Denormalized "donorName donorEmail donationId" — the admin list searches
+    // across all three, and a Convex search index covers a single field.
+    searchText: v.string(),
   })
     .index("by_status", ["status"])
-    .index("by_donationId", ["donationId"]),
+    .index("by_donationId", ["donationId"])
+    .searchIndex("search_all", {
+      searchField: "searchText",
+      filterFields: ["status"],
+    }),
 
   helpInterests: defineTable({
     name: v.string(),
@@ -355,7 +374,40 @@ export default defineSchema({
     followedUpBy: v.optional(v.id("admins")),
     followedUpAt: v.optional(v.number()),
     notes: v.optional(v.string()),
-  }).index("by_status", ["status"]),
+    updatedAt: v.optional(v.number()),
+
+    // Denormalized "name email studentName" — matches the three columns the
+    // admin list currently ORs across.
+    searchText: v.string(),
+  })
+    .index("by_status", ["status"])
+    // The list can filter by help type with no status selected.
+    .index("by_helpType", ["helpType"])
+    .searchIndex("search_all", {
+      searchField: "searchText",
+      filterFields: ["status", "helpType"],
+    }),
+
+  // Denormalized counts -----------------------------------------------------
+  //
+  // Convex has no count operator, and the guidelines forbid .collect().length —
+  // an unbounded scan that silently becomes a production problem as a table
+  // grows, with no failure signal until it does. So the admin dashboard's stat
+  // tiles read pre-computed counters instead.
+  //
+  // One row per counted bucket, keyed "table:field:value" (see lib/counters.ts
+  // for the key builders — never hand-write a key). A row per bucket rather
+  // than one document holding every count, so a burst of application status
+  // changes contends only with itself and not with, say, donation writes.
+  //
+  // These are derived data. They are correct only for as long as every mutation
+  // that writes a counted table also bumps them — see the warning in
+  // lib/counters.ts.
+
+  counters: defineTable({
+    key: v.string(),
+    value: v.number(),
+  }).index("by_key", ["key"]),
 
   // Audit trail -------------------------------------------------------------
   //
@@ -371,6 +423,10 @@ export default defineSchema({
     newValue: v.optional(v.any()),
   })
     .index("by_adminId", ["adminId"])
+    // The log viewer filters by action type. Filtering by entity type alone is
+    // served by the prefix of by_entityType_and_entityId, so it needs no index
+    // of its own.
+    .index("by_actionType", ["actionType"])
     .index("by_entityType_and_entityId", ["entityType", "entityId"]),
 
   // Email — infrastructure for Phase 6, currently unused --------------------

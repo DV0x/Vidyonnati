@@ -4,9 +4,9 @@ Pick-up doc for the Supabase → Convex migration. Architecture and the full pha
 plan live in `CONVEX_MIGRATION_PLAN.md`; this file is **current state, what is
 proven, what is broken, and what to do next**.
 
-**As of:** 2026-07-31, end of session 1
-**Phases done:** 0 (setup), 0.5 (hardening), 1 (schema + auth) — all verified
-**Next:** Phase 2 — read paths + RSC conversion
+**As of:** 2026-07-31, end of session 2
+**Phases done:** 0 (setup), 0.5 (hardening), 1 (schema + auth), **2a (read paths)**
+**Next:** Phase 2b — RSC conversion (wire the pages to the queries below)
 
 ---
 
@@ -94,17 +94,21 @@ signed in as that address yet.
 
 **All 22 API routes return 401.** They authenticate via
 `supabase.auth.getUser()` reading Supabase cookies that no longer exist. Every
-dashboard and admin page renders its shell and shows no data. This is the
-documented Phase 1 broken window and is exactly what Phase 2 closes — it is not
-a regression to chase.
+dashboard and admin page renders its shell and shows no data.
+
+Phase 2a wrote the Convex queries that replace those routes, but **nothing calls
+them yet** — no page has been converted. So the broken window is still open, and
+it closes in 2b, not 2a. Not a regression to chase.
 
 ---
 
 ## Code state
 
+Phase 1 files are below; the Phase 2a query files are listed in the 2a section.
+
 **Added**
 ```
-convex/schema.ts              12 tables, 27 indexes, 2 search indexes
+convex/schema.ts              12 tables, 32 indexes, 4 search indexes (after 2a)
 convex/auth.config.ts         reads CLERK_JWT_ISSUER_DOMAIN (a Convex env var)
 convex/lib/auth.ts            requireStudent/requireAdmin (+ForWrite), getOrCreateStudent
 convex/users.ts               me, ensureStudentProfile, updateProfile
@@ -139,22 +143,80 @@ eslint.config.mjs             ESLint 9 flat config
 
 Largest phase. Two distinct halves; do them in this order.
 
-### 2a. Convex queries + authorization helpers
+### 2a. Convex queries + authorization helpers — ✅ **done**
 
-Port read paths off `app/api/**`. Every function body does its own auth via
-`requireStudent` / `requireAdmin` — Convex has no RLS.
+14 read paths ported. Every function body does its own auth via
+`requireStudent` / `requireAdmin` — Convex has no RLS. Every list is bounded by
+`.take()` or `paginate()`; no bare `.collect()` anywhere.
 
-Per the guidelines: **bound every list query** (`.take()` / `paginate()`, never
-bare `.collect()`), and **never `.collect().length` to count** — the five admin
-stat counts need `@convex-dev/aggregate` or denormalized counters.
+| File | Queries |
+|---|---|
+| `convex/featured.ts` | `list` (public) |
+| `convex/applications.ts` | `myApplications`, `myApplication`, `existingForYear` |
+| `convex/spotlight.ts` | `mine`, `mineById` |
+| `convex/admin.ts` | `stats`, `applications`, `application`, `spotlightApplications`, `spotlightApplication`, `featured`, `donations`, `helpInterests`, `activityLog`, `admins` |
+| `convex/lib/counters.ts` | `counterKeys`, `readCounter`, `bumpCounter` |
+| `convex/lib/search.ts` | `searchText` builders, one per searchable table |
 
-Highest-risk item: **`featured.list`** (public, unauthenticated). The Supabase
-route hand-picked columns; `ctx.db.get()` returns whole documents, and those
-tables also hold bank details and Aadhaar references. **Project fields explicitly.**
+**`featured.list` is the PII boundary.** It is the only public read over
+`applications` / `spotlightApplications`, which also hold bank account numbers,
+IFSC codes and Aadhaar document references. `ctx.db.query()` returns whole
+documents, so the explicit projection in that file is the entire protection.
+Its `FeaturedStudent` type mirrors `Student` in `app/components/StudentCard.tsx`
+— 10 fields, nothing else. Never spread a document into that result.
 
-Search: the admin lists search across name/email/applicationId. The schema has a
-denormalized `searchText` field plus `search_all` search indexes — populate it
-on every create/update.
+**Documents return metadata, no URLs.** `storageId` / `fileName` / `mimeType`
+only. Minting a `ctx.storage.getUrl()` would silently settle the Phase 4 open
+decision in favour of permanent, unrevocable capability URLs over Aadhaar cards
+and bank passbooks. Left open on purpose.
+
+**Schema gaps closed** (free now, a backfill migration later — tables are empty):
+
+- `donations` and `helpInterests` had no `searchText` and no search index, yet
+  both admin routes search. Added, plus `filterFields`.
+- `spotlightApplications.search_all` gained `isFeatured` as a filter field; the
+  admin list combines search with the featured toggle.
+- New indexes: `applications.by_applicationType`, `helpInterests.by_helpType`,
+  `adminActivityLog.by_actionType`, `spotlightApplications.by_isFeatured`.
+  Each backs a filter combination that would otherwise have been a full scan.
+
+**Counts use a `counters` table, not `@convex-dev/aggregate`** — a change from
+what `CONVEX_MIGRATION_PLAN.md` specifies. The component turned out to need five
+separately-mounted instances (one per table+dimension) plus `convex-helpers`
+Triggers to avoid drift. One keyed table with a `bumpCounter` helper does the
+same job; Convex mutations are serializable transactions, so read-modify-write
+on a counter row is race-free. See the Phase 3 obligation below.
+
+**Verified against the live deployment,** not by inspection: every index and
+search branch was executed with `npx convex run --identity`, `featured:list`
+returns `{students: [], total: 0}` unauthenticated, and the admin guards reject
+an anonymous caller at `requireAdmin`.
+
+### Phase 3 owes the counters — do not skip this
+
+`convex/lib/counters.ts` has no way to maintain itself. Every mutation that
+writes a counted table must call `bumpCounter` **in the same mutation as the
+write**, so the two commit or roll back together:
+
+```
+insert  → bumpCounter(ctx, key(newStatus), +1)
+delete  → bumpCounter(ctx, key(oldStatus), -1)
+status  → bumpCounter(ctx, key(oldStatus), -1) AND key(newStatus), +1
+```
+
+The status transition is the one that gets done half-right: incrementing the new
+bucket while forgetting to decrement the old inflates the dashboard forever.
+Build keys through `counterKeys`, never by hand — a typo creates a second
+counter nothing reads and leaves the real one stale.
+
+Also still owed: a **recompute/repair mutation** that rebuilds each counter from
+its source table. Denormalized counts drift eventually, and without a resync path
+the only fix is manual arithmetic. Not written in 2a because doing it correctly
+needs batching across transactions (`.take(n)` a page, schedule the next), and an
+unbatched version breaks on exactly the table size that motivates it.
+
+Phase 3 also owns `searchText`: `convex/lib/search.ts` has a builder per table,
+and every create/update must recompute it or the admin lists go stale.
 
 ### 2b. Rendering conversion (three tiers)
 
@@ -170,6 +232,16 @@ on every create/update.
   `/admin` currently makes two fetches; merge into one query.
 - **Convert leaf-first.** Dropping `"use client"` from a page breaks any hook
   inside it — extract interactive children (dialogs, carousels, filters) first.
+- **Admin lists return a cursor page, not `{total, page, totalPages}`.** The four
+  admin list screens currently render numbered pagination off a `count: 'exact'`
+  total. Convex is cursor-based and computing a total means reading every
+  matching row, which defeats the pagination — so these become
+  `usePaginatedQuery` + load-more. Behaviour change, flagged Low risk in the plan
+  but it does need sign-off.
+- **`/admin` still makes two fetches** (stats + activity). `admin.stats` and
+  `admin.activityLog` are deliberately separate queries — activity is paginated
+  and stats is not. Merging them for the one-`preloadQuery` rule means a thin
+  wrapper query, not a change to either.
 - Add per-page `metadata`, `app/sitemap.ts`, `app/robots.ts`. None exist; all 23
   pages currently inherit only the root layout's tags because `export const
   metadata` is unavailable in client components. The build confirms the cost —
