@@ -1,13 +1,15 @@
 "use client"
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { motion } from 'motion/react'
-import type { Donation, DonationStatus } from '@/types/database'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
+import { usePaginatedQuery } from 'convex/react'
+import type { FunctionReturnType } from 'convex/server'
+import { api } from '@/convex/_generated/api'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
@@ -37,8 +39,6 @@ import {
 import { toast } from 'sonner'
 import {
   Search,
-  ChevronLeft,
-  ChevronRight,
   Clock,
   CheckCircle2,
   XCircle,
@@ -47,16 +47,17 @@ import {
   Edit,
   Mail,
   Phone,
-  RefreshCw,
-} from 'lucide-react'
+  } from 'lucide-react'
 
-interface DonationsResponse {
-  donations: Donation[]
-  total: number
-  page: number
-  pageSize: number
-  totalPages: number
-}
+// Mirrors the union in convex/schema.ts; see the note in the applications list.
+type DonationStatus =
+  | 'pending'
+  | 'confirmed'
+  | 'completed'
+  | 'failed'
+  | 'refunded'
+
+type DonationRow = FunctionReturnType<typeof api.admin.donations>['page'][number]
 
 const statusConfig: Record<string, { label: string; className: string; icon: React.ElementType }> = {
   pending: {
@@ -90,21 +91,16 @@ export default function DonationsPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  const [donations, setDonations] = useState<Donation[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [total, setTotal] = useState(0)
-  const [totalPages, setTotalPages] = useState(0)
 
   // Filter state
   const [search, setSearch] = useState(searchParams.get('search') || '')
   const [status, setStatus] = useState<DonationStatus | 'all'>(
     (searchParams.get('status') as DonationStatus) || 'all'
   )
-  const [page, setPage] = useState(parseInt(searchParams.get('page') || '1', 10))
   const pageSize = 10
 
   // Edit dialog state
-  const [editingDonation, setEditingDonation] = useState<Donation | null>(null)
+  const [editingDonation, setEditingDonation] = useState<DonationRow | null>(null)
   const [editStatus, setEditStatus] = useState<DonationStatus>('pending')
   const [editNotes, setEditNotes] = useState('')
   const [editReference, setEditReference] = useState('')
@@ -120,53 +116,34 @@ export default function DonationsPage() {
     return () => clearTimeout(timer)
   }, [search])
 
-  const fetchDonations = useCallback(async () => {
-    setIsLoading(true)
+  // Cursor pagination, not numbered pages. Convex has no count operator, and a
+  // total means reading every matching row — which is what pagination exists to
+  // avoid. Filters live in args, so changing one resets the cursor for free.
+  const { results: donations, status: pageStatus, loadMore } = usePaginatedQuery(
+    api.admin.donations,
+    { search: debouncedSearch || undefined, status: status === 'all' ? undefined : status },
+    { initialNumItems: pageSize },
+  )
 
-    const params = new URLSearchParams()
-    if (debouncedSearch) params.set('search', debouncedSearch)
-    if (status !== 'all') params.set('status', status)
-    params.set('page', page.toString())
-    params.set('pageSize', pageSize.toString())
-
-    const res = await fetch(`/api/admin/donations?${params.toString()}`)
-    if (res.ok) {
-      const data: DonationsResponse = await res.json()
-      setDonations(data.donations)
-      setTotal(data.total)
-      setTotalPages(data.totalPages)
-    }
-
-    setIsLoading(false)
-  }, [debouncedSearch, status, page])
-
-  useEffect(() => {
-    fetchDonations()
-  }, [fetchDonations])
 
   // Update URL when filters change
   useEffect(() => {
     const params = new URLSearchParams()
     if (debouncedSearch) params.set('search', debouncedSearch)
     if (status !== 'all') params.set('status', status)
-    if (page > 1) params.set('page', page.toString())
 
     const query = params.toString()
     router.replace(`/admin/donations${query ? `?${query}` : ''}`, {
       scroll: false,
     })
-  }, [debouncedSearch, status, page, router])
+  }, [debouncedSearch, status, router])
 
-  // Reset to page 1 when filters change
-  useEffect(() => {
-    setPage(1)
-  }, [debouncedSearch, status])
 
-  const handleEditClick = (donation: Donation) => {
+  const handleEditClick = (donation: DonationRow) => {
     setEditingDonation(donation)
     setEditStatus(donation.status as DonationStatus)
     setEditNotes(donation.notes || '')
-    setEditReference(donation.transaction_reference || '')
+    setEditReference(donation.transactionReference || '')
   }
 
   const handleSave = async () => {
@@ -174,7 +151,11 @@ export default function DonationsPage() {
     setIsSaving(true)
 
     try {
-      const res = await fetch(`/api/admin/donations/${editingDonation.id}`, {
+      // STILL SUPABASE, STILL 401. This is a write, and write paths are
+      // Phase 3 — Phase 2 converted reads only. Once the mutation exists,
+      // the list updates itself: it is a live Convex subscription now, which
+      // is why the manual refetch that used to follow this was removed.
+      const res = await fetch(`/api/admin/donations/${editingDonation._id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -187,7 +168,6 @@ export default function DonationsPage() {
       if (res.ok) {
         toast.success('Donation updated successfully')
         setEditingDonation(null)
-        fetchDonations()
       } else {
         toast.error('Failed to update donation')
       }
@@ -218,14 +198,6 @@ export default function DonationsPage() {
             View and manage donation records
           </p>
         </div>
-        <Button
-          variant="outline"
-          onClick={fetchDonations}
-          disabled={isLoading}
-        >
-          <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-          Refresh
-        </Button>
       </motion.div>
 
       {/* Filters */}
@@ -282,15 +254,15 @@ export default function DonationsPage() {
               <div>
                 <CardTitle className="text-xl">Donation Records</CardTitle>
                 <CardDescription>
-                  {isLoading
-                    ? 'Loading...'
-                    : `${total} donation${total !== 1 ? 's' : ''} found • Total: ${formatCurrency(totalAmount)}`}
+                  {pageStatus === 'LoadingFirstPage'
+                    ? 'Loading…'
+                    : `${donations.length} donation${donations.length !== 1 ? 's' : ''} loaded${pageStatus === 'CanLoadMore' ? '+' : ''} • Total: ${formatCurrency(totalAmount)}`}
                 </CardDescription>
               </div>
             </div>
           </CardHeader>
           <CardContent>
-            {isLoading ? (
+            {pageStatus === 'LoadingFirstPage' ? (
               <div className="space-y-4">
                 {[1, 2, 3, 4, 5].map((i) => (
                   <Skeleton key={i} className="h-16 w-full rounded-lg" />
@@ -315,7 +287,7 @@ export default function DonationsPage() {
                     <TableBody>
                       {donations.map((donation) => (
                         <DonationRow
-                          key={donation.id}
+                          key={donation._id}
                           donation={donation}
                           onEdit={handleEditClick}
                         />
@@ -324,34 +296,18 @@ export default function DonationsPage() {
                   </Table>
                 </div>
 
-                {/* Pagination */}
-                {totalPages > 1 && (
-                  <div className="flex items-center justify-between border-t pt-4 mt-4">
-                    <p className="text-sm text-gray-600">
-                      Page {page} of {totalPages}
-                    </p>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setPage((p) => Math.max(1, p - 1))}
-                        disabled={page === 1}
-                      >
-                        <ChevronLeft className="h-4 w-4" />
-                        Previous
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                        disabled={page === totalPages}
-                      >
-                        Next
-                        <ChevronRight className="h-4 w-4" />
-                      </Button>
-                    </div>
+                {pageStatus === 'CanLoadMore' || pageStatus === 'LoadingMore' ? (
+                  <div className="flex justify-center border-t pt-4 mt-4">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => loadMore(pageSize)}
+                      disabled={pageStatus === 'LoadingMore'}
+                    >
+                      {pageStatus === 'LoadingMore' ? 'Loading…' : 'Load more'}
+                    </Button>
                   </div>
-                )}
+                ) : null}
               </>
             )}
           </CardContent>
@@ -373,10 +329,10 @@ export default function DonationsPage() {
               {/* Donation Info */}
               <div className="rounded-lg bg-gray-50 p-3 space-y-1">
                 <p className="text-sm">
-                  <span className="font-medium">ID:</span> {editingDonation.donation_id}
+                  <span className="font-medium">ID:</span> {editingDonation.donationId}
                 </p>
                 <p className="text-sm">
-                  <span className="font-medium">Donor:</span> {editingDonation.donor_name}
+                  <span className="font-medium">Donor:</span> {editingDonation.donorName}
                 </p>
                 <p className="text-sm">
                   <span className="font-medium">Amount:</span> {formatCurrency(editingDonation.amount)}
@@ -444,8 +400,8 @@ function DonationRow({
   donation,
   onEdit,
 }: {
-  donation: Donation
-  onEdit: (donation: Donation) => void
+  donation: DonationRow
+  onEdit: (donation: DonationRow) => void
 }) {
   const status = statusConfig[donation.status] || statusConfig.pending
   const StatusIcon = status.icon
@@ -453,19 +409,19 @@ function DonationRow({
   return (
     <TableRow className="hover:bg-gray-50">
       <TableCell>
-        <span className="font-medium text-primary">{donation.donation_id}</span>
+        <span className="font-medium text-primary">{donation.donationId}</span>
       </TableCell>
       <TableCell>
         <div>
-          <p className="font-medium text-gray-900">{donation.donor_name}</p>
+          <p className="font-medium text-gray-900">{donation.donorName}</p>
           <div className="flex items-center gap-3 text-sm text-gray-500">
             <span className="flex items-center gap-1">
               <Mail className="h-3 w-3" />
-              {donation.donor_email}
+              {donation.donorEmail}
             </span>
             <span className="flex items-center gap-1 hidden md:flex">
               <Phone className="h-3 w-3" />
-              {donation.donor_phone}
+              {donation.donorPhone}
             </span>
           </div>
         </div>
@@ -483,7 +439,7 @@ function DonationRow({
         </Badge>
       </TableCell>
       <TableCell className="hidden sm:table-cell text-gray-500">
-        {new Date(donation.created_at!).toLocaleDateString('en-IN', {
+        {new Date(donation._creationTime!).toLocaleDateString('en-IN', {
           day: 'numeric',
           month: 'short',
           year: 'numeric',

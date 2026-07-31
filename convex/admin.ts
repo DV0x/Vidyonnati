@@ -1,5 +1,4 @@
 import { v } from "convex/values"
-import { ConvexError } from "convex/values"
 import { paginationOptsValidator } from "convex/server"
 import type { PaginationOptions } from "convex/server"
 import { query } from "./_generated/server"
@@ -36,11 +35,9 @@ const MAX_FEATURED = 100
 // Five indexed point reads against the counters table rather than five counting
 // scans — see lib/counters.ts for why, and for what Phase 3 owes these.
 //
-// The old route issued two separate fetches for stats and recent activity. They
-// are deliberately NOT merged here: /admin should use one preloadQuery, and
-// merging is a Phase 2b concern once that page becomes a Server Component. Note
-// activity is paginated and this is not, so the merge is a wrapper query, not a
-// change to either of these.
+// /admin does not call this directly; it calls `overview` below, which returns
+// these counts alongside recent activity in a single read. This stays exported
+// as the standalone counts, for a caller that wants the tiles without the log.
 export const stats = query({
   args: {},
   handler: async (ctx) => {
@@ -67,6 +64,66 @@ export const stats = query({
       newHelpInterests,
       pendingDonations,
       featuredStudents,
+    }
+  },
+})
+
+// The /admin landing page, in one read.
+//
+// It used to issue two fetches — stats and the ten most recent activity rows.
+// The rendering plan allows one preloadQuery per page because multiple preloads
+// are not consistency-guaranteed with each other, so they are merged here.
+//
+// This wraps `stats` rather than replacing it, and does NOT reuse activityLog:
+// that query is paginated, and this needs a fixed, small slice. Folding a
+// paginated query into a page that wants ten rows would mean shipping cursor
+// machinery for no benefit.
+const RECENT_ACTIVITY = 10
+
+export const overview = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx)
+
+    const [
+      pendingApplications,
+      pendingSpotlight,
+      newHelpInterests,
+      pendingDonations,
+      featuredStudents,
+      recent,
+    ] = await Promise.all([
+      readCounter(ctx, counterKeys.applicationsByStatus("pending")),
+      readCounter(ctx, counterKeys.spotlightByStatus("pending")),
+      readCounter(ctx, counterKeys.helpInterestsByStatus("new")),
+      readCounter(ctx, counterKeys.donationsByStatus("pending")),
+      readCounter(ctx, counterKeys.spotlightFeatured()),
+      ctx.db.query("adminActivityLog").order("desc").take(RECENT_ACTIVITY),
+    ])
+
+    const adminCache = new Map<Id<"admins">, { name: string; email: string }>()
+    const recentActivity = await Promise.all(
+      recent.map(async (entry) => {
+        let who = adminCache.get(entry.adminId)
+        if (!who) {
+          const admin = await ctx.db.get("admins", entry.adminId)
+          who = admin
+            ? { name: admin.name ?? admin.email, email: admin.email }
+            : { name: "Unknown", email: "" }
+          adminCache.set(entry.adminId, who)
+        }
+        return { ...entry, admin: who }
+      }),
+    )
+
+    return {
+      stats: {
+        pendingApplications: pendingApplications + pendingSpotlight,
+        newHelpInterests,
+        pendingDonations,
+        featuredStudents,
+      },
+      recentActivity,
     }
   },
 })
@@ -147,8 +204,11 @@ export const application = query({
   handler: async (ctx, args) => {
     await requireAdmin(ctx)
 
+    // null, not a throw, so the Server Component can render a real 404 via
+    // notFound() rather than an error boundary. Same reasoning as the student
+    // detail queries.
     const app = await ctx.db.get("applications", args.applicationId)
-    if (!app) throw new ConvexError("Application not found")
+    if (!app) return null
 
     const docs = await ctx.db
       .query("applicationDocuments")
@@ -243,7 +303,7 @@ export const spotlightApplication = query({
       "spotlightApplications",
       args.spotlightApplicationId,
     )
-    if (!app) throw new ConvexError("Spotlight application not found")
+    if (!app) return null
 
     const docs = await ctx.db
       .query("spotlightDocuments")

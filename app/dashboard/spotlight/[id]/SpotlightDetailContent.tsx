@@ -25,7 +25,6 @@ import {
   AlertCircle,
   Eye,
   Sparkles,
-  Download,
   Calendar,
   MapPin,
   Phone,

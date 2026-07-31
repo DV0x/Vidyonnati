@@ -186,7 +186,7 @@ export async function GET(request: NextRequest) {
       if (b.order === null) return -1
       return a.order - b.order
     })
-    .map(({ order, ...student }) => student)
+    .map(({ ...student }) => student)
 
   // Apply limit if provided
   if (limit && limit > 0) {

@@ -1,14 +1,16 @@
 "use client"
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { motion } from 'motion/react'
-import type { SpotlightApplication, SpotlightStatus } from '@/types/database'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
+import { usePaginatedQuery } from 'convex/react'
+import type { FunctionReturnType } from 'convex/server'
+import { api } from '@/convex/_generated/api'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Select,
@@ -27,8 +29,6 @@ import {
 } from '@/components/ui/table'
 import {
   Search,
-  ChevronLeft,
-  ChevronRight,
   Clock,
   Eye,
   CheckCircle2,
@@ -38,13 +38,14 @@ import {
   AlertTriangle,
 } from 'lucide-react'
 
-interface SpotlightApplicationsResponse {
-  applications: SpotlightApplication[]
-  total: number
-  page: number
-  pageSize: number
-  totalPages: number
-}
+// Mirrors the union in convex/schema.ts. Declared locally because
+// types/database.ts goes away with the Supabase client in Phase 5.
+type SpotlightStatus =
+  | 'pending'
+  | 'under_review'
+  | 'approved'
+  | 'rejected'
+  | 'needs_info'
 
 const statusConfig: Record<string, { label: string; className: string; icon: React.ElementType }> = {
   pending: {
@@ -78,10 +79,6 @@ export default function SpotlightApplicationsPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  const [applications, setApplications] = useState<SpotlightApplication[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [total, setTotal] = useState(0)
-  const [totalPages, setTotalPages] = useState(0)
 
   // Filter state from URL params
   const [search, setSearch] = useState(searchParams.get('search') || '')
@@ -91,7 +88,6 @@ export default function SpotlightApplicationsPage() {
   const [featured, setFeatured] = useState<'all' | 'true' | 'false'>(
     (searchParams.get('featured') as 'all' | 'true' | 'false') || 'all'
   )
-  const [page, setPage] = useState(parseInt(searchParams.get('page') || '1', 10))
   const pageSize = 10
 
   // Debounced search
@@ -104,30 +100,15 @@ export default function SpotlightApplicationsPage() {
     return () => clearTimeout(timer)
   }, [search])
 
-  const fetchApplications = useCallback(async () => {
-    setIsLoading(true)
+  // Cursor pagination, not numbered pages. Convex has no count operator, and a
+  // total means reading every matching row — which is what pagination exists to
+  // avoid. Filters live in args, so changing one resets the cursor for free.
+  const { results: applications, status: pageStatus, loadMore } = usePaginatedQuery(
+    api.admin.spotlightApplications,
+    { search: debouncedSearch || undefined, status: status === 'all' ? undefined : status, isFeatured: featured === 'all' ? undefined : featured === 'true' },
+    { initialNumItems: pageSize },
+  )
 
-    const params = new URLSearchParams()
-    if (debouncedSearch) params.set('search', debouncedSearch)
-    if (status !== 'all') params.set('status', status)
-    if (featured !== 'all') params.set('featured', featured)
-    params.set('page', page.toString())
-    params.set('pageSize', pageSize.toString())
-
-    const res = await fetch(`/api/admin/spotlight-applications?${params.toString()}`)
-    if (res.ok) {
-      const data: SpotlightApplicationsResponse = await res.json()
-      setApplications(data.applications)
-      setTotal(data.total)
-      setTotalPages(data.totalPages)
-    }
-
-    setIsLoading(false)
-  }, [debouncedSearch, status, featured, page])
-
-  useEffect(() => {
-    fetchApplications()
-  }, [fetchApplications])
 
   // Update URL when filters change
   useEffect(() => {
@@ -135,18 +116,13 @@ export default function SpotlightApplicationsPage() {
     if (debouncedSearch) params.set('search', debouncedSearch)
     if (status !== 'all') params.set('status', status)
     if (featured !== 'all') params.set('featured', featured)
-    if (page > 1) params.set('page', page.toString())
 
     const query = params.toString()
     router.replace(`/admin/spotlight-applications${query ? `?${query}` : ''}`, {
       scroll: false,
     })
-  }, [debouncedSearch, status, featured, page, router])
+  }, [debouncedSearch, status, featured, router])
 
-  // Reset to page 1 when filters change
-  useEffect(() => {
-    setPage(1)
-  }, [debouncedSearch, status, featured])
 
   return (
     <div className="space-y-6">
@@ -233,13 +209,13 @@ export default function SpotlightApplicationsPage() {
               <div>
                 <CardTitle className="text-xl">Applications</CardTitle>
                 <CardDescription>
-                  {isLoading ? 'Loading...' : `${total} application${total !== 1 ? 's' : ''} found`}
+                  {pageStatus === 'LoadingFirstPage' ? 'Loading…' : `${applications.length} application${applications.length !== 1 ? 's' : ''} loaded${pageStatus === 'CanLoadMore' ? '+' : ''}`}
                 </CardDescription>
               </div>
             </div>
           </CardHeader>
           <CardContent>
-            {isLoading ? (
+            {pageStatus === 'LoadingFirstPage' ? (
               <div className="space-y-4">
                 {[1, 2, 3, 4, 5].map((i) => (
                   <Skeleton key={i} className="h-16 w-full rounded-lg" />
@@ -265,7 +241,7 @@ export default function SpotlightApplicationsPage() {
                     <TableBody>
                       {applications.map((application) => (
                         <ApplicationRow
-                          key={application.id}
+                          key={application._id}
                           application={application}
                         />
                       ))}
@@ -273,34 +249,18 @@ export default function SpotlightApplicationsPage() {
                   </Table>
                 </div>
 
-                {/* Pagination */}
-                {totalPages > 1 && (
-                  <div className="flex items-center justify-between border-t pt-4 mt-4">
-                    <p className="text-sm text-gray-600">
-                      Page {page} of {totalPages}
-                    </p>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setPage((p) => Math.max(1, p - 1))}
-                        disabled={page === 1}
-                      >
-                        <ChevronLeft className="h-4 w-4" />
-                        Previous
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                        disabled={page === totalPages}
-                      >
-                        Next
-                        <ChevronRight className="h-4 w-4" />
-                      </Button>
-                    </div>
+                {pageStatus === 'CanLoadMore' || pageStatus === 'LoadingMore' ? (
+                  <div className="flex justify-center border-t pt-4 mt-4">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => loadMore(pageSize)}
+                      disabled={pageStatus === 'LoadingMore'}
+                    >
+                      {pageStatus === 'LoadingMore' ? 'Loading…' : 'Load more'}
+                    </Button>
                   </div>
-                )}
+                ) : null}
               </>
             )}
           </CardContent>
@@ -310,7 +270,7 @@ export default function SpotlightApplicationsPage() {
   )
 }
 
-function ApplicationRow({ application }: { application: SpotlightApplication }) {
+function ApplicationRow({ application }: { application: FunctionReturnType<typeof api.admin.spotlightApplications>['page'][number] }) {
   const status = statusConfig[application.status] || statusConfig.pending
   const StatusIcon = status.icon
 
@@ -318,20 +278,20 @@ function ApplicationRow({ application }: { application: SpotlightApplication }) 
     <TableRow className="cursor-pointer hover:bg-gray-50">
       <TableCell>
         <Link
-          href={`/admin/spotlight-applications/${application.id}`}
+          href={`/admin/spotlight-applications/${application._id}`}
           className="font-medium text-primary hover:underline"
         >
-          {application.spotlight_id}
+          {application.spotlightId}
         </Link>
       </TableCell>
       <TableCell>
         <div>
-          <p className="font-medium text-gray-900">{application.full_name}</p>
+          <p className="font-medium text-gray-900">{application.fullName}</p>
           <p className="text-sm text-gray-500">{application.email}</p>
         </div>
       </TableCell>
       <TableCell className="hidden md:table-cell">
-        <span className="text-gray-600">{application.course_stream}</span>
+        <span className="text-gray-600">{application.courseStream}</span>
       </TableCell>
       <TableCell>
         <Badge className={status.className}>
@@ -340,7 +300,7 @@ function ApplicationRow({ application }: { application: SpotlightApplication }) 
         </Badge>
       </TableCell>
       <TableCell className="hidden sm:table-cell">
-        {application.is_featured ? (
+        {application.isFeatured ? (
           <Badge className="bg-amber-100 text-amber-800 border-amber-200">
             <Star className="h-3 w-3 mr-1 fill-current" />
             Featured
@@ -350,7 +310,7 @@ function ApplicationRow({ application }: { application: SpotlightApplication }) 
         )}
       </TableCell>
       <TableCell className="hidden sm:table-cell text-gray-500">
-        {new Date(application.created_at!).toLocaleDateString('en-IN', {
+        {new Date(application._creationTime!).toLocaleDateString('en-IN', {
           day: 'numeric',
           month: 'short',
           year: 'numeric',
@@ -358,7 +318,7 @@ function ApplicationRow({ application }: { application: SpotlightApplication }) 
       </TableCell>
       <TableCell className="text-right">
         <Button asChild variant="ghost" size="sm">
-          <Link href={`/admin/spotlight-applications/${application.id}`}>
+          <Link href={`/admin/spotlight-applications/${application._id}`}>
             <Eye className="h-4 w-4" />
             <span className="sr-only sm:not-sr-only sm:ml-2">View</span>
           </Link>

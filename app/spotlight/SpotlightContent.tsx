@@ -15,9 +15,7 @@ import {
   ArrowRight,
   Eye,
   HandHeart,
-  GraduationCap,
   ClipboardCheck,
-  Award,
   Sparkles,
 } from "lucide-react"
 

@@ -5,8 +5,9 @@ plan live in `CONVEX_MIGRATION_PLAN.md`; this file is **current state, what is
 proven, what is broken, and what to do next**.
 
 **As of:** 2026-07-31, end of session 2
-**Phases done:** 0 (setup), 0.5 (hardening), 1 (schema + auth), **2a (read paths)**
-**Next:** Phase 2b — RSC conversion (wire the pages to the queries below)
+**Phases done:** 0 (setup), 0.5 (hardening), 1 (schema + auth), **2a + 2b**
+**Next:** Phase 3 — write paths. Every read is on Convex; every write is still a
+401 against a dead API route.
 
 ---
 
@@ -92,13 +93,30 @@ signed in as that address yet.
 
 ## What is broken right now (expected)
 
-**All 22 API routes return 401.** They authenticate via
-`supabase.auth.getUser()` reading Supabase cookies that no longer exist. Every
-dashboard and admin page renders its shell and shows no data.
+**Reads are fixed. Writes are not.**
 
-Phase 2a wrote the Convex queries that replace those routes, but **nothing calls
-them yet** — no page has been converted. So the broken window is still open, and
-it closes in 2b, not 2a. Not a regression to chase.
+Every GET is now a Convex query — `app/dashboard/**` and `app/admin/**` no
+longer reference `app/api/**` at all. What remains is six `PATCH` calls against
+routes that still authenticate via `supabase.auth.getUser()` and therefore still
+return 401:
+
+| Screen | Write |
+|---|---|
+| `/admin/scholarship-applications/[id]` | status + reviewer notes |
+| `/admin/spotlight-applications/[id]` | status, notes, featured |
+| `/admin/donations` | status edit dialog |
+| `/admin/help-interests` | status edit dialog |
+| `/admin/spotlight` | feature toggle, reorder |
+
+Plus the two wizards, `/donate` and `HelpInterestDialog`, which POST.
+
+Each site is commented `STILL SUPABASE, STILL 401`. This is the Phase 3
+boundary, not a regression — Phase 2 was reads by design.
+
+One consequence worth knowing: the optimistic updates and manual refetches that
+used to follow these writes have been **removed**, not ported. The lists are
+live Convex subscriptions now, so a Phase 3 mutation pushes the new value on its
+own; a client-side guess would just race it.
 
 ---
 
@@ -139,9 +157,7 @@ eslint.config.mjs             ESLint 9 flat config
 
 ---
 
-## Phase 2 — the work
-
-Largest phase. Two distinct halves; do them in this order.
+## Phase 2 — the work (complete)
 
 ### 2a. Convex queries + authorization helpers — ✅ **done**
 
@@ -152,9 +168,11 @@ Largest phase. Two distinct halves; do them in this order.
 | File | Queries |
 |---|---|
 | `convex/featured.ts` | `list` (public) |
-| `convex/applications.ts` | `myApplications`, `myApplication`, `existingForYear` |
-| `convex/spotlight.ts` | `mine`, `mineById` |
-| `convex/admin.ts` | `stats`, `applications`, `application`, `spotlightApplications`, `spotlightApplication`, `featured`, `donations`, `helpInterests`, `activityLog`, `admins` |
+| `convex/applications.ts` | `myApplication`, `existingForYear` |
+| `convex/spotlight.ts` | `mineById` |
+| `convex/dashboard.ts` | `summary` — both student lists in one read |
+| `convex/lib/studentData.ts` | shared list + document reads |
+| `convex/admin.ts` | `stats`, `overview`, `applications`, `application`, `spotlightApplications`, `spotlightApplication`, `featured`, `donations`, `helpInterests`, `activityLog`, `admins` |
 | `convex/lib/counters.ts` | `counterKeys`, `readCounter`, `bumpCounter` |
 | `convex/lib/search.ts` | `searchText` builders, one per searchable table |
 
@@ -218,34 +236,94 @@ unbatched version breaks on exactly the table size that motivates it.
 Phase 3 also owns `searchText`: `convex/lib/search.ts` has a builder per table,
 and every create/update must recompute it or the admin lists go stale.
 
-### 2b. Rendering conversion (three tiers)
+### 2b. Rendering conversion — ✅ **done**
 
-| Tier | Pages | Method |
-|---|---|---|
-| Public | `/`, `/students`, `/spotlight`, `/about`, `/gallery`, `/media`, `/donate` | Server Component + `fetchQuery` + revalidate |
-| Authenticated | `/dashboard/*`, `/admin/*` | `preloadQuery` → `usePreloadedQuery` (server first paint **and** live) |
-| Interactive | `/apply`, `/spotlight/apply`, `/login`, `/register` | stay client + `useMutation` |
+**The plan's premise for the public tier was wrong, and checking beat assuming.**
+It claimed `"use client"` pages ship "empty shells" and budgeted this as the
+largest chunk of the migration. The build output says otherwise: every public
+page already prerendered 40–150KB of real HTML, because Next server-renders
+client components too. The actual defect was narrower — all 23 routes emitted
+the root layout's `<title>` verbatim, since `export const metadata` cannot live
+in a client module.
 
-- **Do not** use `preloadQuery` on public pages — it sets `cache: 'no-store'`
-  and kills static rendering. Use `fetchQuery`.
-- **One `preloadQuery` per page** — multiple are not consistency-guaranteed.
-  `/admin` currently makes two fetches; merge into one query.
-- **Convert leaf-first.** Dropping `"use client"` from a page breaks any hook
-  inside it — extract interactive children (dialogs, carousels, filters) first.
-- **Admin lists return a cursor page, not `{total, page, totalPages}`.** The four
-  admin list screens currently render numbered pagination off a `count: 'exact'`
-  total. Convex is cursor-based and computing a total means reading every
-  matching row, which defeats the pagination — so these become
-  `usePaginatedQuery` + load-more. Behaviour change, flagged Low risk in the plan
-  but it does need sign-off.
-- **`/admin` still makes two fetches** (stats + activity). `admin.stats` and
-  `admin.activityLog` are deliberately separate queries — activity is paginated
-  and stats is not. Merging them for the one-`preloadQuery` rule means a thin
-  wrapper query, not a change to either.
-- Add per-page `metadata`, `app/sitemap.ts`, `app/robots.ts`. None exist; all 23
-  pages currently inherit only the root layout's tags because `export const
-  metadata` is unavailable in client components. The build confirms the cost —
-  `/`, `/students`, `/spotlight` show as `○ (Static)` but are empty shells.
+So each public route is now a thin Server Component shell exporting metadata
+around its existing client content (`AboutContent`, `GalleryContent`, …). No
+`fetchQuery` anywhere on the public tier, because **no public page reads data** —
+`StudentSpotlightSection` is commented out of the homepage and `/students` is a
+placeholder, so `featured.list` currently has no consumer. Titles are distinct
+per page; `/students` is `noindex` while it stays a placeholder.
+
+Added `app/sitemap.ts`, `app/robots.ts`, and `lib/site.ts`. That last one exists
+because the first sitemap build published `http://localhost:3000` URLs: the
+origin came from `NEXT_PUBLIC_APP_URL`, which is localhost in `.env.local`.
+Sitemap entries, the robots `Sitemap:` line and `metadataBase` are absolute and
+only ever read against production, so the canonical origin is a constant now.
+
+**Authenticated tier** — `preloadQuery` in a Server Component shell,
+`usePreloadedQuery` in the client child: server-rendered first paint *and* a
+live subscription.
+
+| Page | Query |
+|---|---|
+| `/dashboard`, `/dashboard/applications` | `dashboard.summary` |
+| `/dashboard/applications/[id]` | `applications.myApplication` |
+| `/dashboard/spotlight/[id]` | `spotlight.mineById` |
+| `/dashboard/profile` | reads via AuthContext; writes `users.updateProfile` |
+| `/admin` | `admin.overview` (stats + activity, merged) |
+| `/admin/*` lists | `usePaginatedQuery` |
+| `/admin/*/[id]` | `admin.application` / `admin.spotlightApplication` |
+
+`lib/convexToken.ts` supplies the Clerk token for server-side calls. It calls
+`getToken()` with **no template argument** and explains why at length — this is
+the trap CLAUDE.md records.
+
+Detail queries return `null` rather than throwing when a record is missing or
+belongs to someone else, so the shell renders a real 404 via `notFound()`
+instead of an error boundary. Missing and not-yours still collapse into one
+answer, so neither can be used to probe which ids exist.
+
+**Admin lists are load-more, not numbered pages.** Convex has no count operator
+and a total means reading every matching row, which is what pagination exists to
+avoid. The "Refresh" buttons went with them: a manual refresh against a live
+subscription is misleading UI.
+
+Three things the type checker caught that the old code did not:
+
+- `siblings_count !== null` — always true under Convex, where optional fields
+  are absent rather than null, and it would have called `.toString()` on
+  `undefined`.
+- `usePaginatedQuery`'s `isLoading` is true for **load-more as well as** the
+  first page, so gating the skeleton on it would blank the whole table every
+  time a reviewer clicked "Load more". Gated on `LoadingFirstPage` instead.
+- Every stale snake_case field reference, across 289 of them.
+
+**Documents render no download links and no photos.** Serving those files is
+Phase 4, where the open decision between permanent `storage.getUrl()` capability
+URLs and a token-authorized HTTP action gets made — they are Aadhaar cards and
+bank passbooks. A dead button would be worse than none. `/admin/spotlight`'s
+photo column has a second problem: the Supabase table had a `photo_url` column
+with no Convex equivalent, so the photo has to come from `spotlightDocuments`.
+
+Lint went from 69 warnings to **57** — below the pre-2b baseline, because the
+conversion deleted the `useEffect` + `fetch` + `setState` pattern rather than
+porting it. 12 `react-hooks/set-state-in-effect` warnings remain, which is the
+genuine remainder the plan predicted (`AnimatedInput`, `AnimatedTextarea`,
+`HeroSlider`, `MainNavigation` and similar UI state). Restoring that rule to
+`"error"` is now a much smaller job.
+
+### Not done in 2b: the `createRouteMatcher` migration
+
+`proxy.ts` still uses it, and it is still deprecated in `@clerk/nextjs` v7.6.3.
+Deliberately left alone. Clerk's objection is that path matching can diverge
+from routing and leave protected resources reachable — which does not describe
+this architecture: every dashboard and admin page now reads through a Convex
+query that calls `requireStudent` or `requireAdmin`, so the resource-based check
+Clerk is pointing at is already in place. The middleware redirect is a UX
+affordance on top of it.
+
+Migrating it properly means moving the `/login?redirect=` behaviour into the
+dashboard and admin layouts, which is a change to the login flow rather than to
+rendering. Worth doing; worth doing on its own, with the flow tested.
 
 ### After Phase 2
 

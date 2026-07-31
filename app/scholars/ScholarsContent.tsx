@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { motion, AnimatePresence } from "motion/react"
-import { GraduationCap, Award, MapPin, Calendar, Users, Trophy, Star, Heart, IndianRupee } from "lucide-react"
+import { GraduationCap, MapPin, Calendar, Users, Trophy, Star, Heart, IndianRupee } from "lucide-react"
 
 interface Student {
   name: string

@@ -1,14 +1,16 @@
 "use client"
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { motion } from 'motion/react'
-import type { Application, ApplicationStatus, ApplicationType } from '@/types/database'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
+import { usePaginatedQuery } from 'convex/react'
+import type { FunctionReturnType } from 'convex/server'
+import { api } from '@/convex/_generated/api'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Select,
@@ -27,8 +29,6 @@ import {
 } from '@/components/ui/table'
 import {
   Search,
-  ChevronLeft,
-  ChevronRight,
   Clock,
   Eye,
   CheckCircle2,
@@ -37,13 +37,15 @@ import {
   FileText,
 } from 'lucide-react'
 
-interface ApplicationsResponse {
-  applications: Application[]
-  total: number
-  page: number
-  pageSize: number
-  totalPages: number
-}
+// Mirrors the unions in convex/schema.ts. Declared here rather than imported
+// from types/database.ts, which Phase 5 deletes along with the Supabase client.
+type ApplicationStatus =
+  | 'pending'
+  | 'under_review'
+  | 'approved'
+  | 'rejected'
+  | 'needs_info'
+type ApplicationType = 'first-year' | 'second-year'
 
 const statusConfig: Record<string, { label: string; className: string; icon: React.ElementType }> = {
   pending: {
@@ -77,10 +79,6 @@ export default function ScholarshipApplicationsPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  const [applications, setApplications] = useState<Application[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [total, setTotal] = useState(0)
-  const [totalPages, setTotalPages] = useState(0)
 
   // Filter state from URL params
   const [search, setSearch] = useState(searchParams.get('search') || '')
@@ -90,7 +88,6 @@ export default function ScholarshipApplicationsPage() {
   const [type, setType] = useState<ApplicationType | 'all'>(
     (searchParams.get('type') as ApplicationType) || 'all'
   )
-  const [page, setPage] = useState(parseInt(searchParams.get('page') || '1', 10))
   const pageSize = 10
 
   // Debounced search
@@ -103,30 +100,23 @@ export default function ScholarshipApplicationsPage() {
     return () => clearTimeout(timer)
   }, [search])
 
-  const fetchApplications = useCallback(async () => {
-    setIsLoading(true)
+  // Cursor pagination, not numbered pages. Convex has no count operator, and
+  // computing a total means reading every matching row — which is exactly what
+  // pagination is meant to avoid. For a review queue, load-more is also the
+  // better interaction. Filters live in `args`; changing one gives
+  // usePaginatedQuery new args, which resets the cursor for us — that is why
+  // the old "reset to page 1 when filters change" effect is gone.
+  const { results: applications, status: pageStatus, loadMore } =
+    usePaginatedQuery(
+      api.admin.applications,
+      {
+        search: debouncedSearch || undefined,
+        status: status === 'all' ? undefined : status,
+        applicationType: type === 'all' ? undefined : type,
+      },
+      { initialNumItems: pageSize },
+    )
 
-    const params = new URLSearchParams()
-    if (debouncedSearch) params.set('search', debouncedSearch)
-    if (status !== 'all') params.set('status', status)
-    if (type !== 'all') params.set('type', type)
-    params.set('page', page.toString())
-    params.set('pageSize', pageSize.toString())
-
-    const res = await fetch(`/api/admin/scholarship-applications?${params.toString()}`)
-    if (res.ok) {
-      const data: ApplicationsResponse = await res.json()
-      setApplications(data.applications)
-      setTotal(data.total)
-      setTotalPages(data.totalPages)
-    }
-
-    setIsLoading(false)
-  }, [debouncedSearch, status, type, page])
-
-  useEffect(() => {
-    fetchApplications()
-  }, [fetchApplications])
 
   // Update URL when filters change
   useEffect(() => {
@@ -134,18 +124,12 @@ export default function ScholarshipApplicationsPage() {
     if (debouncedSearch) params.set('search', debouncedSearch)
     if (status !== 'all') params.set('status', status)
     if (type !== 'all') params.set('type', type)
-    if (page > 1) params.set('page', page.toString())
 
     const query = params.toString()
     router.replace(`/admin/scholarship-applications${query ? `?${query}` : ''}`, {
       scroll: false,
     })
-  }, [debouncedSearch, status, type, page, router])
-
-  // Reset to page 1 when filters change
-  useEffect(() => {
-    setPage(1)
-  }, [debouncedSearch, status, type])
+  }, [debouncedSearch, status, type, router])
 
   return (
     <div className="space-y-6">
@@ -232,13 +216,15 @@ export default function ScholarshipApplicationsPage() {
               <div>
                 <CardTitle className="text-xl">Applications</CardTitle>
                 <CardDescription>
-                  {isLoading ? 'Loading...' : `${total} application${total !== 1 ? 's' : ''} found`}
+                  {pageStatus === 'LoadingFirstPage'
+                    ? 'Loading…'
+                    : `${applications.length} application${applications.length !== 1 ? 's' : ''} loaded${pageStatus === 'CanLoadMore' ? '+' : ''}`}
                 </CardDescription>
               </div>
             </div>
           </CardHeader>
           <CardContent>
-            {isLoading ? (
+            {pageStatus === 'LoadingFirstPage' ? (
               <div className="space-y-4">
                 {[1, 2, 3, 4, 5].map((i) => (
                   <Skeleton key={i} className="h-16 w-full rounded-lg" />
@@ -263,7 +249,7 @@ export default function ScholarshipApplicationsPage() {
                     <TableBody>
                       {applications.map((application) => (
                         <ApplicationRow
-                          key={application.id}
+                          key={application._id}
                           application={application}
                         />
                       ))}
@@ -271,34 +257,18 @@ export default function ScholarshipApplicationsPage() {
                   </Table>
                 </div>
 
-                {/* Pagination */}
-                {totalPages > 1 && (
-                  <div className="flex items-center justify-between border-t pt-4 mt-4">
-                    <p className="text-sm text-gray-600">
-                      Page {page} of {totalPages}
-                    </p>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setPage((p) => Math.max(1, p - 1))}
-                        disabled={page === 1}
-                      >
-                        <ChevronLeft className="h-4 w-4" />
-                        Previous
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                        disabled={page === totalPages}
-                      >
-                        Next
-                        <ChevronRight className="h-4 w-4" />
-                      </Button>
-                    </div>
+                {pageStatus === 'CanLoadMore' || pageStatus === 'LoadingMore' ? (
+                  <div className="flex justify-center border-t pt-4 mt-4">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => loadMore(pageSize)}
+                      disabled={pageStatus === 'LoadingMore'}
+                    >
+                      {pageStatus === 'LoadingMore' ? 'Loading…' : 'Load more'}
+                    </Button>
                   </div>
-                )}
+                ) : null}
               </>
             )}
           </CardContent>
@@ -308,7 +278,11 @@ export default function ScholarshipApplicationsPage() {
   )
 }
 
-function ApplicationRow({ application }: { application: Application }) {
+function ApplicationRow({
+  application,
+}: {
+  application: FunctionReturnType<typeof api.admin.applications>['page'][number]
+}) {
   const status = statusConfig[application.status] || statusConfig.pending
   const StatusIcon = status.icon
 
@@ -316,21 +290,21 @@ function ApplicationRow({ application }: { application: Application }) {
     <TableRow className="cursor-pointer hover:bg-gray-50">
       <TableCell>
         <Link
-          href={`/admin/scholarship-applications/${application.id}`}
+          href={`/admin/scholarship-applications/${application._id}`}
           className="font-medium text-primary hover:underline"
         >
-          {application.application_id}
+          {application.applicationId}
         </Link>
       </TableCell>
       <TableCell>
         <div>
-          <p className="font-medium text-gray-900">{application.full_name}</p>
+          <p className="font-medium text-gray-900">{application.fullName}</p>
           <p className="text-sm text-gray-500">{application.email}</p>
         </div>
       </TableCell>
       <TableCell className="hidden md:table-cell">
         <Badge variant="outline">
-          {application.application_type === 'first-year' ? '1st Year' : '2nd Year'}
+          {application.applicationType === 'first-year' ? '1st Year' : '2nd Year'}
         </Badge>
       </TableCell>
       <TableCell>
@@ -340,7 +314,7 @@ function ApplicationRow({ application }: { application: Application }) {
         </Badge>
       </TableCell>
       <TableCell className="hidden sm:table-cell text-gray-500">
-        {new Date(application.created_at!).toLocaleDateString('en-IN', {
+        {new Date(application._creationTime!).toLocaleDateString('en-IN', {
           day: 'numeric',
           month: 'short',
           year: 'numeric',
@@ -348,7 +322,7 @@ function ApplicationRow({ application }: { application: Application }) {
       </TableCell>
       <TableCell className="text-right">
         <Button asChild variant="ghost" size="sm">
-          <Link href={`/admin/scholarship-applications/${application.id}`}>
+          <Link href={`/admin/scholarship-applications/${application._id}`}>
             <Eye className="h-4 w-4" />
             <span className="sr-only sm:not-sr-only sm:ml-2">View</span>
           </Link>

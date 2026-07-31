@@ -1,13 +1,15 @@
 "use client"
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { motion } from 'motion/react'
-import type { HelpInterest, HelpType, HelpInterestStatus } from '@/types/database'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
+import { usePaginatedQuery } from 'convex/react'
+import type { FunctionReturnType } from 'convex/server'
+import { api } from '@/convex/_generated/api'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
@@ -37,13 +39,10 @@ import {
 import { toast } from 'sonner'
 import {
   Search,
-  ChevronLeft,
-  ChevronRight,
   HandHeart,
   Edit,
   Mail,
   Phone,
-  RefreshCw,
   Sparkles,
   Building2,
   Users,
@@ -55,13 +54,9 @@ import {
   ArrowRight,
 } from 'lucide-react'
 
-interface HelpInterestsResponse {
-  helpInterests: HelpInterest[]
-  total: number
-  page: number
-  pageSize: number
-  totalPages: number
-}
+// Mirrors the unions in convex/schema.ts; see the note in the applications list.
+type HelpInterestStatus = 'new' | 'contacted' | 'converted' | 'closed'
+type HelpType = 'donate' | 'volunteer' | 'corporate' | 'other'
 
 const statusConfig: Record<string, { label: string; className: string; icon: React.ElementType }> = {
   new: {
@@ -97,10 +92,6 @@ export default function HelpInterestsPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  const [helpInterests, setHelpInterests] = useState<HelpInterest[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [total, setTotal] = useState(0)
-  const [totalPages, setTotalPages] = useState(0)
 
   // Filter state
   const [search, setSearch] = useState(searchParams.get('search') || '')
@@ -110,11 +101,10 @@ export default function HelpInterestsPage() {
   const [helpType, setHelpType] = useState<HelpType | 'all'>(
     (searchParams.get('type') as HelpType) || 'all'
   )
-  const [page, setPage] = useState(parseInt(searchParams.get('page') || '1', 10))
   const pageSize = 10
 
   // Edit dialog state
-  const [editingInterest, setEditingInterest] = useState<HelpInterest | null>(null)
+  const [editingInterest, setEditingInterest] = useState<FunctionReturnType<typeof api.admin.helpInterests>['page'][number] | null>(null)
   const [editStatus, setEditStatus] = useState<HelpInterestStatus>('new')
   const [editNotes, setEditNotes] = useState('')
   const [isSaving, setIsSaving] = useState(false)
@@ -129,30 +119,15 @@ export default function HelpInterestsPage() {
     return () => clearTimeout(timer)
   }, [search])
 
-  const fetchHelpInterests = useCallback(async () => {
-    setIsLoading(true)
+  // Cursor pagination, not numbered pages. Convex has no count operator, and a
+  // total means reading every matching row — which is what pagination exists to
+  // avoid. Filters live in args, so changing one resets the cursor for free.
+  const { results: helpInterests, status: pageStatus, loadMore } = usePaginatedQuery(
+    api.admin.helpInterests,
+    { search: debouncedSearch || undefined, status: status === 'all' ? undefined : status, helpType: helpType === 'all' ? undefined : helpType },
+    { initialNumItems: pageSize },
+  )
 
-    const params = new URLSearchParams()
-    if (debouncedSearch) params.set('search', debouncedSearch)
-    if (status !== 'all') params.set('status', status)
-    if (helpType !== 'all') params.set('type', helpType)
-    params.set('page', page.toString())
-    params.set('pageSize', pageSize.toString())
-
-    const res = await fetch(`/api/admin/help-interests?${params.toString()}`)
-    if (res.ok) {
-      const data: HelpInterestsResponse = await res.json()
-      setHelpInterests(data.helpInterests)
-      setTotal(data.total)
-      setTotalPages(data.totalPages)
-    }
-
-    setIsLoading(false)
-  }, [debouncedSearch, status, helpType, page])
-
-  useEffect(() => {
-    fetchHelpInterests()
-  }, [fetchHelpInterests])
 
   // Update URL when filters change
   useEffect(() => {
@@ -160,20 +135,15 @@ export default function HelpInterestsPage() {
     if (debouncedSearch) params.set('search', debouncedSearch)
     if (status !== 'all') params.set('status', status)
     if (helpType !== 'all') params.set('type', helpType)
-    if (page > 1) params.set('page', page.toString())
 
     const query = params.toString()
     router.replace(`/admin/help-interests${query ? `?${query}` : ''}`, {
       scroll: false,
     })
-  }, [debouncedSearch, status, helpType, page, router])
+  }, [debouncedSearch, status, helpType, router])
 
-  // Reset to page 1 when filters change
-  useEffect(() => {
-    setPage(1)
-  }, [debouncedSearch, status, helpType])
 
-  const handleEditClick = (interest: HelpInterest) => {
+  const handleEditClick = (interest: FunctionReturnType<typeof api.admin.helpInterests>['page'][number]) => {
     setEditingInterest(interest)
     setEditStatus(interest.status as HelpInterestStatus)
     setEditNotes(interest.notes || '')
@@ -184,7 +154,11 @@ export default function HelpInterestsPage() {
     setIsSaving(true)
 
     try {
-      const res = await fetch(`/api/admin/help-interests/${editingInterest.id}`, {
+      // STILL SUPABASE, STILL 401. This is a write, and write paths are
+      // Phase 3 — Phase 2 converted reads only. Once the mutation exists,
+      // the list updates itself: it is a live Convex subscription now, which
+      // is why the manual refetch that used to follow this was removed.
+      const res = await fetch(`/api/admin/help-interests/${editingInterest._id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -196,7 +170,6 @@ export default function HelpInterestsPage() {
       if (res.ok) {
         toast.success('Help interest updated successfully')
         setEditingInterest(null)
-        fetchHelpInterests()
       } else {
         toast.error('Failed to update help interest')
       }
@@ -224,14 +197,6 @@ export default function HelpInterestsPage() {
             Manage &quot;I Want to Help&quot; submissions from potential donors and volunteers
           </p>
         </div>
-        <Button
-          variant="outline"
-          onClick={fetchHelpInterests}
-          disabled={isLoading}
-        >
-          <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-          Refresh
-        </Button>
       </motion.div>
 
       {/* Filters */}
@@ -304,15 +269,15 @@ export default function HelpInterestsPage() {
               <div>
                 <CardTitle className="text-xl">Help Interests</CardTitle>
                 <CardDescription>
-                  {isLoading
-                    ? 'Loading...'
-                    : `${total} submission${total !== 1 ? 's' : ''} found`}
+                  {pageStatus === 'LoadingFirstPage'
+                    ? 'Loading…'
+                    : `${helpInterests.length} submission${helpInterests.length !== 1 ? 's' : ''} loaded${pageStatus === 'CanLoadMore' ? '+' : ''}`}
                 </CardDescription>
               </div>
             </div>
           </CardHeader>
           <CardContent>
-            {isLoading ? (
+            {pageStatus === 'LoadingFirstPage' ? (
               <div className="space-y-4">
                 {[1, 2, 3, 4, 5].map((i) => (
                   <Skeleton key={i} className="h-16 w-full rounded-lg" />
@@ -337,7 +302,7 @@ export default function HelpInterestsPage() {
                     <TableBody>
                       {helpInterests.map((interest) => (
                         <InterestRow
-                          key={interest.id}
+                          key={interest._id}
                           interest={interest}
                           onEdit={handleEditClick}
                         />
@@ -346,34 +311,18 @@ export default function HelpInterestsPage() {
                   </Table>
                 </div>
 
-                {/* Pagination */}
-                {totalPages > 1 && (
-                  <div className="flex items-center justify-between border-t pt-4 mt-4">
-                    <p className="text-sm text-gray-600">
-                      Page {page} of {totalPages}
-                    </p>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setPage((p) => Math.max(1, p - 1))}
-                        disabled={page === 1}
-                      >
-                        <ChevronLeft className="h-4 w-4" />
-                        Previous
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                        disabled={page === totalPages}
-                      >
-                        Next
-                        <ChevronRight className="h-4 w-4" />
-                      </Button>
-                    </div>
+                {pageStatus === 'CanLoadMore' || pageStatus === 'LoadingMore' ? (
+                  <div className="flex justify-center border-t pt-4 mt-4">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => loadMore(pageSize)}
+                      disabled={pageStatus === 'LoadingMore'}
+                    >
+                      {pageStatus === 'LoadingMore' ? 'Loading…' : 'Load more'}
+                    </Button>
                   </div>
-                )}
+                ) : null}
               </>
             )}
           </CardContent>
@@ -405,10 +354,10 @@ export default function HelpInterestsPage() {
                     {editingInterest.phone}
                   </span>
                 </div>
-                {editingInterest.student_name && (
+                {editingInterest.studentName && (
                   <p className="text-sm flex items-center gap-2 mt-2 pt-2 border-t">
                     <ArrowRight className="h-4 w-4" />
-                    Interested in helping: <strong>{editingInterest.student_name}</strong>
+                    Interested in helping: <strong>{editingInterest.studentName}</strong>
                   </p>
                 )}
               </div>
@@ -474,12 +423,12 @@ function InterestRow({
   interest,
   onEdit,
 }: {
-  interest: HelpInterest
-  onEdit: (interest: HelpInterest) => void
+  interest: FunctionReturnType<typeof api.admin.helpInterests>['page'][number]
+  onEdit: (interest: FunctionReturnType<typeof api.admin.helpInterests>['page'][number]) => void
 }) {
   const status = statusConfig[interest.status] || statusConfig.new
   const StatusIcon = status.icon
-  const type = typeConfig[interest.help_type] || typeConfig.other
+  const type = typeConfig[interest.helpType] || typeConfig.other
   const TypeIcon = type.icon
 
   return (
@@ -502,8 +451,8 @@ function InterestRow({
         </Badge>
       </TableCell>
       <TableCell className="hidden md:table-cell">
-        {interest.student_name ? (
-          <span className="text-gray-700">{interest.student_name}</span>
+        {interest.studentName ? (
+          <span className="text-gray-700">{interest.studentName}</span>
         ) : (
           <span className="text-gray-400">-</span>
         )}
@@ -515,7 +464,7 @@ function InterestRow({
         </Badge>
       </TableCell>
       <TableCell className="hidden sm:table-cell text-gray-500">
-        {new Date(interest.created_at!).toLocaleDateString('en-IN', {
+        {new Date(interest._creationTime!).toLocaleDateString('en-IN', {
           day: 'numeric',
           month: 'short',
           year: 'numeric',

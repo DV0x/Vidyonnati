@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from 'react'
+import { useState } from 'react'
 import { motion } from 'motion/react'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -9,6 +9,9 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
+import { useQuery } from 'convex/react'
+import type { FunctionReturnType } from 'convex/server'
+import { api } from '@/convex/_generated/api'
 import { toast } from 'sonner'
 import {
   Star,
@@ -18,67 +21,29 @@ import {
   Sparkles,
   IndianRupee,
   ExternalLink,
-  RefreshCw,
   ChevronUp,
   ChevronDown,
 } from 'lucide-react'
 
-interface FeaturedStudent {
-  id: string
-  displayId: string
-  fullName: string
-  email: string
-  story: string | null
-  annualNeed: number | null
-  isFeatured: boolean
-  featuredAt: string | null
-  order: number | null
-  status: string
-  source: 'scholarship' | 'spotlight'
-  photoUrl: string | null
-}
-
-interface SpotlightResponse {
-  students: FeaturedStudent[]
-  scholarshipCount: number
-  spotlightCount: number
-}
+type FeaturedStudent = FunctionReturnType<typeof api.admin.featured>[number]
 
 export default function SpotlightManagementPage() {
-  const [students, setStudents] = useState<FeaturedStudent[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  // A live subscription, so there is no local copy to keep in sync and no
+  // refetch after a write — which is why the optimistic filtering below is gone.
+  const featured = useQuery(api.admin.featured)
+  const students = featured ?? []
+  const isLoading = featured === undefined
   const [isSaving, setIsSaving] = useState(false)
-  const [scholarshipCount, setScholarshipCount] = useState(0)
-  const [spotlightCount, setSpotlightCount] = useState(0)
 
-  const fetchStudents = useCallback(async () => {
-    setIsLoading(true)
-    const res = await fetch('/api/admin/spotlight')
-    if (res.ok) {
-      const data: SpotlightResponse = await res.json()
-      setStudents(data.students)
-      setScholarshipCount(data.scholarshipCount)
-      setSpotlightCount(data.spotlightCount)
-    } else {
-      toast.error('Failed to load featured students')
-    }
-    setIsLoading(false)
-  }, [])
-
-  useEffect(() => {
-    fetchStudents()
-  }, [fetchStudents])
+  const scholarshipCount = students.filter((s) => s.source === 'scholarship').length
+  const spotlightCount = students.filter((s) => s.source === 'spotlight').length
 
   const handleToggleFeatured = async (student: FeaturedStudent) => {
     const newFeatured = !student.isFeatured
 
-    // Optimistic update
-    setStudents(prev =>
-      newFeatured
-        ? prev
-        : prev.filter(s => s.id !== student.id)
-    )
-
+    // STILL SUPABASE, STILL 401. Writes are Phase 3. The optimistic update that
+    // used to be here is deliberately gone: the list is a live query now, so the
+    // mutation will push the change rather than the client guessing at it.
     const res = await fetch('/api/admin/spotlight', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -93,13 +58,8 @@ export default function SpotlightManagementPage() {
 
     if (res.ok) {
       toast.success(newFeatured ? 'Student featured' : 'Student removed from spotlight')
-      // Refresh to get updated list
-      if (!newFeatured) {
-        fetchStudents()
-      }
     } else {
       toast.error('Failed to update')
-      fetchStudents() // Revert on error
     }
   }
 
@@ -118,7 +78,6 @@ export default function SpotlightManagementPage() {
       order: i,
     }))
 
-    setStudents(newStudents)
     await saveOrder(reorderItems)
   }
 
@@ -137,7 +96,6 @@ export default function SpotlightManagementPage() {
       order: i,
     }))
 
-    setStudents(newStudents)
     await saveOrder(reorderItems)
   }
 
@@ -154,7 +112,6 @@ export default function SpotlightManagementPage() {
       toast.success('Order saved')
     } else {
       toast.error('Failed to save order')
-      fetchStudents() // Revert on error
     }
 
     setIsSaving(false)
@@ -177,14 +134,6 @@ export default function SpotlightManagementPage() {
             Manage students featured on the homepage
           </p>
         </div>
-        <Button
-          variant="outline"
-          onClick={fetchStudents}
-          disabled={isLoading}
-        >
-          <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-          Refresh
-        </Button>
       </motion.div>
 
       {/* Stats */}
