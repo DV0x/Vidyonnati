@@ -64,7 +64,10 @@ bug listed below.
 
 ## Project docs
 
+- `PHASE_3_HANDOFF.md` — **start here.** Current state, what is proven, and the
+  sequenced next steps. Renamed from `PHASE_2_HANDOFF.md` as of session 3; there
+  is deliberately only ever one of these, updated in place, so it cannot go
+  stale against a second copy.
 - `CONVEX_MIGRATION_PLAN.md` — architecture, schema, phase plan, risks
-- `PHASE_2_HANDOFF.md` — current state and next steps
 - `ARCHITECTURE.md` — pre-migration reference (still accurate for UI/routing;
   its Supabase sections are historical)

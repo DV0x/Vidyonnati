@@ -1,12 +1,18 @@
-# Phase 2 Handoff
+# Migration Handoff
 
 Pick-up doc for the Supabase → Convex migration. Architecture and the full phase
 plan live in `CONVEX_MIGRATION_PLAN.md`; this file is **current state, what is
 proven, what is broken, and what to do next**.
 
+There is deliberately only ever **one** of these, updated in place and renamed as
+phases land (`PHASE_2_HANDOFF.md` → `PHASE_3_HANDOFF.md`). Session 3 opened by
+finding a "nothing has been committed" line in it that was four commits out of
+date — so the standing rule is: **correct this file as part of the work, not
+after it**, and never fork a second copy that can disagree with it.
+
 **As of:** 2026-07-31, end of session 3
 **Phases done:** 0 (setup), 0.5 (hardening), 1 (schema + auth), 2a + 2b, **3**
-**Next:** Phase 4 — private document serving, then production cutover.
+**Branch:** `convex-migration`, 5 commits ahead of `main`, clean, nothing merged
 
 Every read *and* every write is on Convex, and **Supabase has been deleted from
 the codebase** — all 22 API routes, both client wrappers, the generated row
@@ -14,13 +20,59 @@ types, and the two npm packages. The build emits no `/api` routes.
 
 ---
 
-## Read this first
+## Next session: start here
 
-`CLAUDE.md` lists the standing rules for this repo: **invoke the `convex` skill
-for backend work and the `clerk` skill for auth work**, and verify against
-installed types or real runtime values rather than inferring. Every bug in
-session 1 came from inferring. The gotchas list there is not decoration — each
-entry cost real debugging time.
+### The one thing with a clock on it
+
+**Google deletes OAuth client `391398186976-…` on 2026-08-15 if it goes unused,
+and only a *production* sign-in counts.** That is roughly two weeks out from the
+end of session 3. Losing the client means losing the verified consent screen and
+re-doing Google verification.
+
+Dev Google runs on Clerk's **shared** credentials, so no amount of local testing
+keeps the client alive. Nothing done so far has exercised it.
+
+The chain standing between here and a production Google sign-in:
+
+| # | Step | State |
+|---|---|---|
+| 1 | Create the **production Convex deployment** | does not exist |
+| 2 | Set `CLERK_JWT_ISSUER_DOMAIN` on it to the **production** Clerk issuer (`clerk.vidyonnatifoundation.org`), not the dev one | — |
+| 3 | Seed the `hello@vidyonnatifoundation.org` admin row there (prod starts empty) | — |
+| 4 | Set Vercel env vars: `pk_live`/`sk_live`, prod `NEXT_PUBLIC_CONVEX_URL`, `CONVEX_DEPLOY_KEY` | none set |
+| 5 | Deploy — **Convex functions before the frontend**, per CLAUDE.md | — |
+| 6 | Actually sign in with Google on production | — |
+
+**Cheaper fallback worth checking first:** the goal is only to make Google see
+the client used. Clerk's hosted Account Portal on the *production* instance may
+be able to complete a Google sign-in without the app being deployed at all,
+which would buy time and decouple the deadline from steps 1–5. This has **not**
+been verified — check it before assuming the full cutover is the only path.
+
+### Recommended order
+
+1. **De-risk the Google deadline** — the fallback above if it works, otherwise
+   steps 1–6.
+2. **Phase 4 — private document serving.** The open decision below. Until it
+   lands, no document is downloadable anywhere: not in the student dashboard, not
+   in admin review. Admins currently cannot see an applicant's marksheet or bank
+   passbook, which makes real reviewing impossible, so this gates any actual use
+   of the system even though it does not gate the deadline.
+3. **Rate limiting** on the two public mutations (below).
+4. **Merge to `main`.** Five phase commits are sitting on `convex-migration`.
+
+### Before touching anything
+
+Read `CLAUDE.md`. Two of its standing rules keep earning their place: **invoke
+the `convex` and `clerk` skills rather than working from recall**, and **verify
+against installed types or real runtime values rather than inferring**. Every
+bug in session 1 came from inferring, and the gotchas list there is not
+decoration — each entry cost real debugging time.
+
+Session 3 is the same story: two bugs that reading could not have caught, both
+found by running the thing. A `storage.delete()` that silently rolled back, and
+a schema validator that would have rejected every card-originated help-interest
+submission. Written up under Phase 3 below.
 
 ---
 
@@ -362,7 +414,7 @@ genuine remainder the plan predicted (`AnimatedInput`, `AnimatedTextarea`,
 `HeroSlider`, `MainNavigation` and similar UI state). Restoring that rule to
 `"error"` is now a much smaller job.
 
-### Not done in 2b: the `createRouteMatcher` migration
+### Still outstanding: the `createRouteMatcher` migration
 
 `proxy.ts` still uses it, and it is still deprecated in `@clerk/nextjs` v7.6.3.
 Deliberately left alone. Clerk's objection is that path matching can diverge
@@ -376,17 +428,39 @@ Migrating it properly means moving the `/login?redirect=` behaviour into the
 dashboard and admin layouts, which is a change to the login flow rather than to
 rendering. Worth doing; worth doing on its own, with the flow tested.
 
-### After Phase 2
+---
 
-Restore `react-hooks/set-state-in-effect` to `"error"` in `eslint.config.mjs`
-(downgraded to `warn` because ~13 of 24 instances are the `useEffect`+`fetch`+
-`setState` pattern Phase 2 deletes), then fix the genuine remainder:
-`AnimatedInput`, `AnimatedTextarea`, `HeroSlider`, `MainNavigation`.
+## Lint debt — where it actually stands
 
-Also migrate off `createRouteMatcher` — deprecated in `@clerk/nextjs` v7.6.3.
-Phase 2 is the natural moment: once dashboards are Server Components, the auth
-check belongs in the page that reads the data, which is the resource-based
-pattern Clerk now recommends.
+`eslint .` is **0 errors, 56 warnings**, in two piles:
+
+| Count | Rule |
+|---|---|
+| 38 | `@typescript-eslint/no-unused-vars` |
+| 12 | `react-hooks/set-state-in-effect` |
+| 6 | one-offs (`no-explicit-any` ×2, `no-img-element`, `incompatible-library`, `purity`, `no-anonymous-default-export`) |
+
+`set-state-in-effect` is downgraded to `warn` in `eslint.config.mjs`. It started
+at 24, on the theory that the `useEffect`+`fetch`+`setState` pattern would
+vanish as the migration replaced it. It did: **12 left, and none of them are
+data fetching.** The remainder is UI state, and it is now a small, bounded job:
+
+```
+app/components/AnimatedInput.tsx          18
+app/components/AnimatedTextarea.tsx       28
+app/components/HeroSlider.tsx             82
+app/components/MainNavigation.tsx         77
+app/dashboard/profile/ProfileContent.tsx  53
+app/apply/.../ApplicationWizard.tsx       264, 306   (draft restore, autosave)
+app/spotlight/.../SpotlightWizard.tsx     224, 265   (same pair)
+components/ui/carousel.tsx                114        (vendored)
+components/ui/use-mobile.tsx              14         (vendored)
+hooks/use-mobile.ts                       14         (vendored, duplicate)
+```
+
+Three of those are vendored shadcn/ui files, and `use-mobile` exists twice —
+worth deleting one copy before fixing either. Restoring the rule to `"error"`
+means clearing the seven first-party instances.
 
 ---
 
@@ -521,11 +595,30 @@ either. Free to change now; the table is empty.
   deploy, and burying it inside a port would hide it.
 - **Clerk `user.created` webhook → Convex HTTP action.** Not built. The lazy
   `getOrCreateStudent` safety net covers it, so this is an optimization.
-- **Private document serving.** Convex `storage.getUrl()` returns permanent,
-  unrevocable URLs. These buckets hold Aadhaar cards and bank passbooks. Plan
-  recommends a token-authorized HTTP action for private docs and plain
-  `getUrl()` for public photos. **Decision still open** — see the plan's File
-  Storage section. Phase 4.
+- **Private document serving — Phase 4, and the largest remaining piece.**
+
+  Convex `storage.getUrl()` returns a **permanent, unrevocable** URL: anyone
+  holding the string can fetch the file forever, with no auth check and no way
+  to withdraw it short of deleting the object. These are Aadhaar cards and bank
+  passbooks. The migration plan recommends a token-authorized HTTP action for
+  private documents and plain `getUrl()` only for public spotlight photos.
+
+  **The decision is still open and has been left open on purpose** three times
+  now — in 2a (`studentData.ts` returns `storageId`/`fileName`/`mimeType` and
+  never mints a URL), in 2b (document rows render no download link), and in 3
+  (uploading was ported, serving was not). Each of those would have settled it
+  by accident. Do not let a fourth one settle it either; decide it deliberately.
+
+  Groundwork already in place: `applicationDocuments` and `spotlightDocuments`
+  both carry a `by_storageId` index, added in Phase 3 for the orphan sweeper but
+  equally the reverse lookup an authorizing serve path needs.
+
+  What this blocks: every document surface in the app. Students cannot download
+  what they uploaded, and **admins cannot open a marksheet, an Aadhaar card or a
+  bank passbook while reviewing** — which means no application can actually be
+  assessed, however well the status workflow now works. One deliberate extra
+  wrinkle on `/admin/spotlight`: the Supabase table had a `photo_url` column
+  with no Convex equivalent, so that photo has to come from `spotlightDocuments`.
 - **Production Convex deployment** does not exist; when created it starts empty
   and needs the `hello@vidyonnatifoundation.org` admin row seeded again, plus
   `CLERK_JWT_ISSUER_DOMAIN` set to the **production** issuer.
