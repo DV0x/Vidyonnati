@@ -1,4 +1,9 @@
-"use client"
+// A Server Component that composes Client Components. Every section below
+// carries its own "use client", so nothing here needs to — and dropping it is
+// what lets the route contribute real HTML rather than an empty shell.
+//
+// No metadata export: the root layout's defaults describe the homepage exactly,
+// and re-stating them here would be two places to keep in sync.
 
 import HeroSlider from "./components/HeroSlider"
 import ImpactStatsSection from "./components/ImpactStatsSection"

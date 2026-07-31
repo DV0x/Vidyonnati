@@ -9,10 +9,9 @@ import { AuthProvider } from "./context/AuthContext"
 import { Toaster } from "@/components/ui/toaster"
 import type React from "react"
 import type { Metadata } from "next"
+import { SITE_URL as siteUrl } from "@/lib/site"
 
 const overpass = Overpass({ subsets: ["latin"] })
-
-const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "https://vidyonnatifoundation.org"
 
 export const metadata: Metadata = {
   title: {
@@ -86,7 +85,10 @@ export default function RootLayout({
       <body className={overpass.className}>
         {/* ClerkProvider supplies identity; ConvexClientProvider forwards the
             Clerk JWT to Convex, so it must sit inside ClerkProvider.
-            AuthProvider still reads Supabase — it is rewritten next. */}
+            AuthProvider gates on useConvexAuth() rather than Clerk's own state,
+            because Clerk reports signed-in before Convex has validated the
+            token — gating on Clerk alone fires queries that arrive
+            unauthenticated. */}
         <ClerkProvider>
           <ConvexClientProvider>
             <AuthProvider>
