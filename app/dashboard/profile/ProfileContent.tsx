@@ -51,9 +51,9 @@ export default function ProfileContent() {
   useEffect(() => {
     if (student) {
       setFormData({
-        full_name: student.full_name || '',
+        full_name: student.fullName || '',
         phone: student.phone || '',
-        date_of_birth: student.date_of_birth || '',
+        date_of_birth: student.dateOfBirth || '',
         gender: student.gender || '',
         village: student.village || '',
         mandal: student.mandal || '',
@@ -342,9 +342,9 @@ export default function ProfileContent() {
                       setIsEditing(false)
                       if (student) {
                         setFormData({
-                          full_name: student.full_name || '',
+                          full_name: student.fullName || '',
                           phone: student.phone || '',
-                          date_of_birth: student.date_of_birth || '',
+                          date_of_birth: student.dateOfBirth || '',
                           gender: student.gender || '',
                           village: student.village || '',
                           mandal: student.mandal || '',
@@ -411,8 +411,12 @@ export default function ProfileContent() {
               <div>
                 <p className="font-medium text-gray-900">Account Created</p>
                 <p className="text-sm text-gray-500">
-                  {student?.created_at
-                    ? new Date(student.created_at).toLocaleDateString('en-IN', {
+                  {/* _creationTime is epoch millis, not the ISO string the
+                      Supabase column held — new Date() takes both, but the
+                      truthiness guard matters: a 0 would be falsy. Not
+                      reachable for a real row, but the check is explicit. */}
+                  {student?._creationTime !== undefined
+                    ? new Date(student._creationTime).toLocaleDateString('en-IN', {
                         day: 'numeric',
                         month: 'long',
                         year: 'numeric',

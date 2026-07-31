@@ -7,7 +7,7 @@ import type { QueryCtx, MutationCtx } from "../_generated/server"
 // scan degrades silently and gives no signal until it is already a problem.
 //
 // ─────────────────────────────────────────────────────────────────────────────
-// PHASE 3: THESE DO NOT MAINTAIN THEMSELVES
+// THESE DO NOT MAINTAIN THEMSELVES
 //
 // A counter is only as correct as the last mutation that remembered to bump it.
 // Every mutation that writes a counted table must call bumpCounter in the SAME
@@ -25,13 +25,21 @@ import type { QueryCtx, MutationCtx } from "../_generated/server"
 // is race-free — no advisory lock or atomic-increment operator is needed. That
 // is a genuine difference from Postgres, where this pattern would need care.
 //
-// Still owed (Phase 3): a recompute/repair mutation that rebuilds every counter
-// from its source table. Denormalized counts drift eventually — a mutation that
-// throws after a partial bump, a hand-edit in the dashboard, a bug — and without
-// a resync path the only fix is manual arithmetic. It is deliberately not
-// written here because doing it correctly needs batching across transactions
-// (read one .take(n) page, schedule the next), and a version that ignores
-// transaction limits would break on exactly the table size that motivates it.
+// When they do drift anyway — a mutation that throws after a partial bump, a
+// hand-edit in the dashboard, a bug — `maintenance.recomputeCounters` rebuilds
+// every counter from its source table. It batches across transactions because a
+// full recount does not fit in one, and it is not a snapshot; see the header of
+// convex/maintenance.ts for what that costs and when to run it.
+//
+// Current call sites, all of which bump in the same mutation as their write:
+//   admin.updateApplication / updateSpotlightApplication / updateDonation /
+//   updateHelpInterest / setFeatured
+//   applications.create / update · spotlight.create / update
+//   donations.create · helpInterests.create
+//
+// Note setFeatured deliberately bumps for the spotlight source only — the
+// dashboard tile counts spotlightApplications.isFeatured alone, matching what
+// the Supabase stats route counted. See the comment at that call site.
 // ─────────────────────────────────────────────────────────────────────────────
 
 type ReviewStatus =
@@ -96,4 +104,32 @@ export async function bumpCounter(
   // decrement without a matching increment, and clamping to zero would hide
   // that bug in the one place it is visible.
   await ctx.db.patch("counters", row._id, { value: row.value + delta })
+}
+
+// Absolute assignment, used only by the repair job in maintenance.ts. Everything
+// on the normal write path goes through bumpCounter — a mutation that sets a
+// counter to a value it computed itself is reintroducing the count-by-scanning
+// this table exists to avoid.
+export async function setCounter(
+  ctx: MutationCtx,
+  key: string,
+  value: number,
+): Promise<void> {
+  const row = await ctx.db
+    .query("counters")
+    .withIndex("by_key", (q) => q.eq("key", key))
+    .unique()
+
+  if (!row) {
+    // An empty bucket needs no row: readCounter already answers 0 for a missing
+    // key, so creating one would just be a row that says nothing.
+    if (value !== 0) await ctx.db.insert("counters", { key, value })
+    return
+  }
+
+  // An existing row DOES have to be written back to zero when the recount says
+  // zero — that is the drift this job exists to correct.
+  if (row.value !== value) {
+    await ctx.db.patch("counters", row._id, { value })
+  }
 }

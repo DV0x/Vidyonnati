@@ -1,6 +1,9 @@
 "use client"
 
 import { useState } from "react"
+import { useMutation } from "convex/react"
+import { api } from "@/convex/_generated/api"
+import { convexErrorMessage } from "@/lib/convexError"
 import { motion } from "motion/react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -56,32 +59,29 @@ export default function HelpInterestDialog({
 
   const { isSubmitting } = form.formState
 
+  const createHelpInterest = useMutation(api.helpInterests.create)
+
   const onSubmit = async (data: HelpInterest) => {
     try {
-      const response = await fetch('/api/help-interest', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: data.name,
-          email: data.email,
-          phone: data.phone,
-          help_type: data.helpType,
-          message: data.message || null,
-          student_id: student?.id,
-          student_name: student?.name,
-        }),
+      await createHelpInterest({
+        name: data.name,
+        email: data.email,
+        phone: data.phone,
+        helpType: data.helpType,
+        message: data.message || undefined,
+        // `student` here comes from featured.list, so its id is an applications
+        // or spotlightApplications document id — not a students id. The field is
+        // named featuredEntityId on the Convex side for exactly that reason; see
+        // the schema comment on helpInterests.
+        featuredEntityId: student?.id,
+        studentName: student?.name,
       })
-
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Failed to submit')
-      }
 
       setIsSubmitted(true)
     } catch (error) {
       console.error('Help interest submission error:', error)
       form.setError('root', {
-        message: error instanceof Error ? error.message : 'Something went wrong. Please try again.',
+        message: convexErrorMessage(error, 'Something went wrong. Please try again.'),
       })
     }
   }

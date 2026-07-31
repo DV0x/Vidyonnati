@@ -7,6 +7,9 @@ import { Button } from "@/components/ui/button"
 import { AnimatedInput } from "@/app/components/AnimatedInput"
 import { toast } from "@/components/ui/use-toast"
 import { useDonorContext } from "@/app/context/DonorContext"
+import { useMutation } from "convex/react"
+import { api } from "@/convex/_generated/api"
+import { convexErrorMessage } from "@/lib/convexError"
 import { Check, Loader2 } from "lucide-react"
 
 const PRESET_AMOUNTS = [
@@ -76,6 +79,8 @@ export default function DonateContent() {
     return Object.keys(newErrors).length === 0
   }
 
+  const createDonation = useMutation(api.donations.create)
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!validateForm()) {
@@ -91,37 +96,29 @@ export default function DonateContent() {
     const finalAmount = isCustom ? customAmount : amount
 
     try {
-      const response = await fetch('/api/donations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          donor_name: donorName,
-          donor_email: donorEmail,
-          donor_phone: donorPhone,
-          amount: parseFloat(finalAmount),
-        }),
+      const donation = await createDonation({
+        donorName,
+        donorEmail,
+        donorPhone,
+        amount: parseFloat(finalAmount),
       })
-
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Failed to create donation')
-      }
-
-      const data = await response.json()
 
       setDonorInfo({
         name: donorName,
         email: donorEmail,
         phone: donorPhone,
         amount: finalAmount,
-        donationId: data.donation_id,
+        donationId: donation.donationId,
       })
       router.push("/donate/wire-transfer")
     } catch (error) {
       console.error('Donation error:', error)
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Something went wrong. Please try again.",
+        description: convexErrorMessage(
+          error,
+          "Something went wrong. Please try again.",
+        ),
         variant: "destructive",
       })
     } finally {

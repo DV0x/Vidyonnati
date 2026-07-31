@@ -8,7 +8,8 @@ import { motion } from 'motion/react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { usePreloadedQuery, type Preloaded } from 'convex/react'
+import { usePreloadedQuery, useMutation, type Preloaded } from 'convex/react'
+import { convexErrorMessage } from '@/lib/convexError'
 import type { FunctionReturnType } from 'convex/server'
 import { api } from '@/convex/_generated/api'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -121,33 +122,28 @@ export default function SpotlightReviewContent({
   const [reviewerNotes, setReviewerNotes] = useState(application.reviewerNotes || '')
   const [isFeatured, setIsFeatured] = useState(application.isFeatured || false)
 
+  const updateSpotlightApplication = useMutation(
+    api.admin.updateSpotlightApplication,
+  )
+
   const handleSave = async () => {
     setIsSaving(true)
 
     try {
-      // STILL SUPABASE, STILL 401. Writes are Phase 3.
-      const res = await fetch(`/api/admin/spotlight-applications/${applicationId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          status,
-          reviewer_notes: reviewerNotes,
-          is_featured: isFeatured,
-        }),
+      await updateSpotlightApplication({
+        id: applicationId,
+        status,
+        reviewerNotes,
+        isFeatured,
       })
-
-      if (res.ok) {
-        // No local merge: the preloaded query is a live subscription, so a
-        // Phase 3 mutation will push the new values here on its own.
-        toast.success('Application updated successfully')
-      } else {
-        toast.error('Failed to update application')
-      }
-    } catch {
-      toast.error('An error occurred')
+      // No local merge: the preloaded query is a live subscription and pushes
+      // the new values here on its own.
+      toast.success('Application updated successfully')
+    } catch (error) {
+      toast.error(convexErrorMessage(error, 'Failed to update application'))
+    } finally {
+      setIsSaving(false)
     }
-
-    setIsSaving(false)
   }
 
 

@@ -8,9 +8,10 @@ import { toast } from 'sonner'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { usePreloadedQuery, type Preloaded } from 'convex/react'
+import { usePreloadedQuery, useMutation, type Preloaded } from 'convex/react'
 import type { FunctionReturnType } from 'convex/server'
 import { api } from '@/convex/_generated/api'
+import { convexErrorMessage } from '@/lib/convexError'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Separator } from '@/components/ui/separator'
 import { Textarea } from '@/components/ui/textarea'
@@ -110,6 +111,8 @@ export default function ApplicationReviewContent({
   const [newStatus, setNewStatus] = useState<ApplicationStatus>(application.status)
   const [reviewerNotes, setReviewerNotes] = useState(application.reviewerNotes || '')
 
+  const updateApplication = useMutation(api.admin.updateApplication)
+
   const handleSave = async () => {
     if (!applicationId || !application) return
 
@@ -131,23 +134,17 @@ export default function ApplicationReviewContent({
       return
     }
 
-    // STILL SUPABASE, STILL 401. Writes are Phase 3; Phase 2 converted reads.
-    const res = await fetch(`/api/admin/scholarship-applications/${applicationId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updateData),
-    })
-
-    if (res.ok) {
-      // No local merge: once this becomes a Convex mutation in Phase 3, the
-      // preloaded query is a live subscription and pushes the new values here
-      // on its own.
+    try {
+      await updateApplication({ id: applicationId, ...updateData })
+      // No local merge: the preloaded query is a live subscription, so it
+      // pushes the new values here on its own. A client-side guess would only
+      // race the real one.
       toast.success('Application updated successfully')
-    } else {
-      toast.error('Failed to update application')
+    } catch (error) {
+      toast.error(convexErrorMessage(error, 'Failed to update application'))
+    } finally {
+      setIsSaving(false)
     }
-
-    setIsSaving(false)
   }
 
   const status = statusConfig[application.status] || statusConfig.pending

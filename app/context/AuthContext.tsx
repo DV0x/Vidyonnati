@@ -5,7 +5,6 @@ import { useUser, useClerk } from "@clerk/nextjs"
 import { useConvexAuth, useQuery, useMutation } from "convex/react"
 import { api } from "@/convex/_generated/api"
 import type { Doc } from "@/convex/_generated/dataModel"
-import type { Student } from "@/types/database"
 
 // Identity now comes from Clerk, profile data from Convex.
 //
@@ -32,7 +31,16 @@ interface AuthUser {
 
 interface AuthContextType {
   user: AuthUser | null
-  student: Student | null
+  /**
+   * The Convex students document, camelCase and unmapped.
+   *
+   * Phase 2 handed this back through a toLegacyStudent() adapter that
+   * reshaped it into the Supabase snake_case `Student` row type, so the
+   * consuming components needed no edits mid-migration. Phase 3 removed the
+   * adapter and updated all six call sites, which is what allowed the Supabase
+   * row types to be deleted outright rather than carried along.
+   */
+  student: Doc<"students"> | null
   isAdmin: boolean
   isLoading: boolean
   signOut: () => Promise<void>
@@ -40,31 +48,6 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
-
-// TEMPORARY ADAPTER — remove in Phase 3.
-//
-// Convex documents are camelCase; six components still read the Supabase
-// snake_case Student shape (ApplicationWizard, SpotlightWizard, profile page,
-// MainNavigation, dashboard layout + page). Three of those are rewritten in
-// Phase 3 anyway, so mapping here beats churning ~40 field references now.
-// Typing the return as `Student` makes the compiler prove the shim is complete.
-function toLegacyStudent(doc: Doc<"students">): Student {
-  return {
-    id: doc._id,
-    email: doc.email,
-    full_name: doc.fullName ?? null,
-    phone: doc.phone ?? null,
-    date_of_birth: doc.dateOfBirth ?? null,
-    gender: doc.gender ?? null,
-    address: doc.address ?? null,
-    village: doc.village ?? null,
-    mandal: doc.mandal ?? null,
-    district: doc.district ?? null,
-    pincode: doc.pincode ?? null,
-    created_at: new Date(doc._creationTime).toISOString(),
-    updated_at: doc.updatedAt ? new Date(doc.updatedAt).toISOString() : null,
-  }
-}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Gate on useConvexAuth, NOT Clerk's isLoaded: Clerk can report signed-in
@@ -106,7 +89,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return {
       user,
-      student: me?.student ? toLegacyStudent(me.student) : null,
+      student: me?.student ?? null,
       isAdmin: me?.isAdmin ?? false,
       // Still loading while Convex validates the token, or while the profile
       // query is in flight for an authenticated user (undefined = not yet

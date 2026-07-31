@@ -7,7 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
-import { usePaginatedQuery } from 'convex/react'
+import { usePaginatedQuery, useMutation } from 'convex/react'
+import { convexErrorMessage } from '@/lib/convexError'
 import type { FunctionReturnType } from 'convex/server'
 import { api } from '@/convex/_generated/api'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -106,6 +107,8 @@ export default function DonationsPage() {
   const [editReference, setEditReference] = useState('')
   const [isSaving, setIsSaving] = useState(false)
 
+  const updateDonation = useMutation(api.admin.updateDonation)
+
   // Debounced search
   const [debouncedSearch, setDebouncedSearch] = useState(search)
 
@@ -151,31 +154,21 @@ export default function DonationsPage() {
     setIsSaving(true)
 
     try {
-      // STILL SUPABASE, STILL 401. This is a write, and write paths are
-      // Phase 3 — Phase 2 converted reads only. Once the mutation exists,
-      // the list updates itself: it is a live Convex subscription now, which
-      // is why the manual refetch that used to follow this was removed.
-      const res = await fetch(`/api/admin/donations/${editingDonation._id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          status: editStatus,
-          notes: editNotes,
-          transaction_reference: editReference,
-        }),
+      // No refetch afterwards: the list is a live Convex subscription, so the
+      // new row arrives on its own.
+      await updateDonation({
+        id: editingDonation._id,
+        status: editStatus,
+        notes: editNotes,
+        transactionReference: editReference,
       })
-
-      if (res.ok) {
-        toast.success('Donation updated successfully')
-        setEditingDonation(null)
-      } else {
-        toast.error('Failed to update donation')
-      }
-    } catch {
-      toast.error('An error occurred')
+      toast.success('Donation updated successfully')
+      setEditingDonation(null)
+    } catch (error) {
+      toast.error(convexErrorMessage(error, 'Failed to update donation'))
+    } finally {
+      setIsSaving(false)
     }
-
-    setIsSaving(false)
   }
 
   // Calculate total amount

@@ -38,8 +38,7 @@ import {
   AlertTriangle,
 } from 'lucide-react'
 
-// Mirrors the union in convex/schema.ts. Declared locally because
-// types/database.ts goes away with the Supabase client in Phase 5.
+// Mirrors the union in convex/schema.ts; see the note in the applications list.
 type SpotlightStatus =
   | 'pending'
   | 'under_review'

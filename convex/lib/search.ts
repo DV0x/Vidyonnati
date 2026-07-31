@@ -10,7 +10,13 @@
 // create/update mutation wrote. Every mutation that touches one of these tables
 // must recompute searchText — it is not derived automatically.
 //
-// Phase 3 owns the call sites. Phase 2a only reads.
+// Called from applications.create/update, spotlight.create/update,
+// donations.create and helpInterests.create.
+//
+// The admin review mutations deliberately do NOT recompute: they change status,
+// notes and the featured flag, and none of those appear in any searchText. A
+// future admin write that edits a name, an email or a human-readable id must
+// start calling these, or the admin lists will keep matching the old value.
 
 function compose(...parts: Array<string | undefined | null>): string {
   return parts

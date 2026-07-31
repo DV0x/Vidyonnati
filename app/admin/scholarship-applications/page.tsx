@@ -37,8 +37,8 @@ import {
   FileText,
 } from 'lucide-react'
 
-// Mirrors the unions in convex/schema.ts. Declared here rather than imported
-// from types/database.ts, which Phase 5 deletes along with the Supabase client.
+// Mirrors the unions in convex/schema.ts. Declared locally rather than derived
+// from the schema because these also drive the filter UI's option lists.
 type ApplicationStatus =
   | 'pending'
   | 'under_review'

@@ -11,10 +11,39 @@ const reviewStatus = v.union(
   v.literal("needs_info"),
 )
 
-const gender = v.union(v.literal("male"), v.literal("female"))
+// Exported so the write paths validate against the same union the table is
+// defined with. A second hand-written copy in a mutation file is how a schema
+// and its validators drift apart.
+export const gender = v.union(v.literal("male"), v.literal("female"))
+
+// What the student is doing now, and who is at home. Both are exported for the
+// same reason as `gender` — the spotlight write paths validate against these.
+export const currentStatus = v.union(
+  v.literal("studying"),
+  v.literal("seeking_admission"),
+  v.literal("working"),
+  v.literal("other"),
+)
+
+export const parentStatus = v.union(
+  v.literal("both_alive"),
+  v.literal("single_parent_father"),
+  v.literal("single_parent_mother"),
+  v.literal("orphan"),
+)
+
+// The exam entries a spotlight applicant lists. Bounded in practice (1-5), so
+// it stays an inline array rather than a child table — see the note on the
+// spotlightApplications table.
+export const competitiveExam = v.object({
+  exam: v.string(),
+  score: v.optional(v.string()),
+  rank: v.optional(v.number()),
+  percentile: v.optional(v.number()),
+})
 
 // Income is a bucketed range, not a number — matches the form's select options.
-const incomeRange = v.union(
+export const incomeRange = v.union(
   v.literal("below-1-lakh"),
   v.literal("1-2-lakhs"),
   v.literal("2-3-lakhs"),
@@ -192,7 +221,11 @@ export default defineSchema({
     mimeType: v.string(),
   })
     .index("by_applicationId", ["applicationId"])
-    .index("by_applicationId_and_documentType", ["applicationId", "documentType"]),
+    .index("by_applicationId_and_documentType", ["applicationId", "documentType"])
+    // Reverse lookup for the orphan sweeper: given a stored object, is any row
+    // still pointing at it? Without this, "is it referenced" is a table scan
+    // per candidate file.
+    .index("by_storageId", ["storageId"]),
 
   // Spotlight applications --------------------------------------------------
 
@@ -220,36 +253,17 @@ export default defineSchema({
     maxMarks: v.number(),
     percentage: v.number(),
     yearOfCompletion: v.number(),
-    currentStatus: v.union(
-      v.literal("studying"),
-      v.literal("seeking_admission"),
-      v.literal("working"),
-      v.literal("other"),
-    ),
+    currentStatus,
 
     // Bounded inline arrays: exams are realistically 1-5 entries and
     // circumstances is a fixed checkbox list, so neither risks the 1MB
     // document limit that makes unbounded arrays a problem.
-    competitiveExams: v.optional(
-      v.array(
-        v.object({
-          exam: v.string(),
-          score: v.optional(v.string()),
-          rank: v.optional(v.number()),
-          percentile: v.optional(v.number()),
-        }),
-      ),
-    ),
+    competitiveExams: v.optional(v.array(competitiveExam)),
     circumstances: v.optional(v.array(v.string())),
     circumstancesOther: v.optional(v.string()),
 
     // Family — parent fields are conditional on parentStatus
-    parentStatus: v.union(
-      v.literal("both_alive"),
-      v.literal("single_parent_father"),
-      v.literal("single_parent_mother"),
-      v.literal("orphan"),
-    ),
+    parentStatus,
     motherName: v.optional(v.string()),
     motherOccupation: v.optional(v.string()),
     motherHealth: v.optional(v.string()),
@@ -316,7 +330,9 @@ export default defineSchema({
     .index("by_spotlightApplicationId_and_documentType", [
       "spotlightApplicationId",
       "documentType",
-    ]),
+    ])
+    // See the note on applicationDocuments.by_storageId.
+    .index("by_storageId", ["storageId"]),
 
   // Donations & leads -------------------------------------------------------
 
@@ -363,7 +379,17 @@ export default defineSchema({
       v.literal("other"),
     ),
     message: v.optional(v.string()),
-    studentId: v.optional(v.id("students")),
+
+    // The featured student whose card the visitor clicked — an `applications`
+    // or `spotlightApplications` id, NOT a `students` id, so it cannot be a
+    // v.id() of any single table. Same reasoning as adminActivityLog.entityId.
+    //
+    // This was `v.id("students")` until Phase 3, which was wrong: HelpInterest-
+    // Dialog receives its student from `featured.list`, whose `id` is the
+    // application document's _id. Postgres accepted the mismatch because the
+    // column was an unconstrained uuid; Convex validates strictly and would
+    // have rejected every card-originated submission at the boundary.
+    featuredEntityId: v.optional(v.string()),
     studentName: v.optional(v.string()),
     status: v.union(
       v.literal("new"),

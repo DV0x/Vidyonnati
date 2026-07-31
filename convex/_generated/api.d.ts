@@ -11,11 +11,16 @@
 import type * as admin from "../admin.js";
 import type * as applications from "../applications.js";
 import type * as dashboard from "../dashboard.js";
+import type * as documents from "../documents.js";
+import type * as donations from "../donations.js";
 import type * as featured from "../featured.js";
+import type * as helpInterests from "../helpInterests.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_counters from "../lib/counters.js";
+import type * as lib_ids from "../lib/ids.js";
 import type * as lib_search from "../lib/search.js";
 import type * as lib_studentData from "../lib/studentData.js";
+import type * as maintenance from "../maintenance.js";
 import type * as spotlight from "../spotlight.js";
 import type * as users from "../users.js";
 
@@ -29,11 +34,16 @@ declare const fullApi: ApiFromModules<{
   admin: typeof admin;
   applications: typeof applications;
   dashboard: typeof dashboard;
+  documents: typeof documents;
+  donations: typeof donations;
   featured: typeof featured;
+  helpInterests: typeof helpInterests;
   "lib/auth": typeof lib_auth;
   "lib/counters": typeof lib_counters;
+  "lib/ids": typeof lib_ids;
   "lib/search": typeof lib_search;
   "lib/studentData": typeof lib_studentData;
+  maintenance: typeof maintenance;
   spotlight: typeof spotlight;
   users: typeof users;
 }>;

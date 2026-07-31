@@ -61,7 +61,7 @@ export default function DashboardLayout({
     return <DashboardSkeleton />
   }
 
-  const displayName = student?.full_name || user?.email?.split('@')[0] || 'Student'
+  const displayName = student?.fullName || user?.email?.split('@')[0] || 'Student'
 
   return (
     <div className="min-h-screen bg-gray-50">

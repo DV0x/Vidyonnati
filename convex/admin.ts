@@ -1,11 +1,11 @@
-import { v } from "convex/values"
+import { v, ConvexError } from "convex/values"
 import { paginationOptsValidator } from "convex/server"
 import type { PaginationOptions } from "convex/server"
-import { query } from "./_generated/server"
-import type { QueryCtx } from "./_generated/server"
+import { query, mutation } from "./_generated/server"
+import type { QueryCtx, MutationCtx } from "./_generated/server"
 import type { Doc, Id } from "./_generated/dataModel"
-import { requireAdmin } from "./lib/auth"
-import { counterKeys, readCounter } from "./lib/counters"
+import { requireAdmin, requireAdminForWrite } from "./lib/auth"
+import { counterKeys, readCounter, bumpCounter } from "./lib/counters"
 
 // Admin-facing reads. Every handler calls requireAdmin first — Convex has no
 // row-level security and proxy.ts route matching is only a UX affordance, so
@@ -645,3 +645,488 @@ async function studentSummary(ctx: QueryCtx, studentId: Id<"students">) {
     phone: student.phone ?? null,
   }
 }
+
+// ---------------------------------------------------------------------------
+// Admin writes
+// ---------------------------------------------------------------------------
+//
+// These are the Phase 3 counterparts to the reads above, kept in the same file
+// on purpose. Every one of them maintains a denormalized counter, and the way
+// those counters go wrong is that someone adds or edits a write path without
+// noticing there is a counter behind it. Reading `readCounter` two hundred
+// lines up makes that hard to miss; a separate adminMutations.ts would not.
+//
+// Three invariants hold across all of them:
+//
+//   1. requireAdminForWrite, not requireAdmin — the write guards also bind a
+//      pre-authorized (email-seeded) admin row to its Clerk ids on first use.
+//   2. A status transition bumps BOTH halves, decrementing the bucket the row
+//      is leaving as well as incrementing the one it enters.
+//   3. searchText is NOT recomputed. It is built from fullName / email / the
+//      human-readable id, and nothing here edits those. If a future write path
+//      does touch one of them, it must recompute via lib/search.ts or the admin
+//      lists go stale — see the note at the bottom of this section.
+//
+// None of them return the updated document. The lists and detail pages are live
+// Convex subscriptions, so the new value arrives on its own; returning it would
+// invite exactly the client-side optimistic update Phase 2b deleted.
+
+const donationStatus = v.union(
+  v.literal("pending"),
+  v.literal("confirmed"),
+  v.literal("completed"),
+  v.literal("failed"),
+  v.literal("refunded"),
+)
+
+const helpInterestStatus = v.union(
+  v.literal("new"),
+  v.literal("contacted"),
+  v.literal("converted"),
+  v.literal("closed"),
+)
+
+// entityType / actionType are the strings the activity-log UI already switches
+// on (app/admin/activity-log/page.tsx and AdminOverviewContent.tsx). They are
+// carried over from the Supabase routes verbatim; changing one silently drops
+// its rows into the "unknown action" branch of that UI.
+async function logActivity(
+  ctx: MutationCtx,
+  adminId: Id<"admins">,
+  actionType: string,
+  entityType: string,
+  entityId: string,
+  oldValue: unknown,
+  newValue: unknown,
+): Promise<void> {
+  await ctx.db.insert("adminActivityLog", {
+    adminId,
+    actionType,
+    entityType,
+    entityId,
+    oldValue,
+    newValue,
+  })
+}
+
+// The Supabase scholarship route logged 'status_change' whenever a status was
+// *supplied*, even when it matched what was already there — so re-saving a form
+// without touching the dropdown produced a status-change entry with identical
+// old and new values. The spotlight route got this right by comparing first.
+// All four below use the comparing form: a status change is logged when the
+// status actually changes.
+function reviewAction(changed: boolean): string {
+  return changed ? "status_change" : "notes_update"
+}
+
+export const updateApplication = mutation({
+  args: {
+    id: v.id("applications"),
+    status: v.optional(reviewStatus),
+    reviewerNotes: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const admin = await requireAdminForWrite(ctx)
+
+    const current = await ctx.db.get("applications", args.id)
+    if (!current) throw new ConvexError("Application not found")
+
+    const now = Date.now()
+    const patch: Partial<Doc<"applications">> = { updatedAt: now }
+
+    if (args.status !== undefined) {
+      patch.status = args.status
+      patch.reviewedBy = admin._id
+      patch.reviewedAt = now
+    }
+    if (args.reviewerNotes !== undefined) {
+      patch.reviewerNotes = args.reviewerNotes
+    }
+
+    await ctx.db.patch("applications", args.id, patch)
+
+    const statusChanged =
+      args.status !== undefined && args.status !== current.status
+    if (statusChanged) {
+      await bumpCounter(
+        ctx,
+        counterKeys.applicationsByStatus(current.status),
+        -1,
+      )
+      await bumpCounter(ctx, counterKeys.applicationsByStatus(args.status!), 1)
+    }
+
+    await logActivity(
+      ctx,
+      admin._id,
+      reviewAction(statusChanged),
+      "application",
+      args.id,
+      { status: current.status, reviewerNotes: current.reviewerNotes },
+      {
+        status: args.status ?? current.status,
+        reviewerNotes: args.reviewerNotes ?? current.reviewerNotes,
+      },
+    )
+
+    return null
+  },
+})
+
+export const updateSpotlightApplication = mutation({
+  args: {
+    id: v.id("spotlightApplications"),
+    status: v.optional(reviewStatus),
+    reviewerNotes: v.optional(v.string()),
+    isFeatured: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const admin = await requireAdminForWrite(ctx)
+
+    const current = await ctx.db.get("spotlightApplications", args.id)
+    if (!current) throw new ConvexError("Spotlight application not found")
+
+    const now = Date.now()
+    const patch: Partial<Doc<"spotlightApplications">> = { updatedAt: now }
+
+    if (args.status !== undefined) {
+      patch.status = args.status
+      patch.reviewedBy = admin._id
+      patch.reviewedAt = now
+    }
+    if (args.reviewerNotes !== undefined) {
+      patch.reviewerNotes = args.reviewerNotes
+    }
+    if (args.isFeatured !== undefined) {
+      patch.isFeatured = args.isFeatured
+      // Passing undefined in a patch REMOVES the field, which is the Convex
+      // equivalent of the old `featured_at = null` on un-featuring.
+      patch.featuredAt = args.isFeatured ? now : undefined
+    }
+
+    await ctx.db.patch("spotlightApplications", args.id, patch)
+
+    const statusChanged =
+      args.status !== undefined && args.status !== current.status
+    if (statusChanged) {
+      await bumpCounter(ctx, counterKeys.spotlightByStatus(current.status), -1)
+      await bumpCounter(ctx, counterKeys.spotlightByStatus(args.status!), 1)
+    }
+
+    // isFeatured is v.optional(v.boolean()), so "not featured" is spelled two
+    // ways: absent, or present-and-false. Both normalize to false before the
+    // comparison, otherwise un-featuring a row that never had the field set
+    // would look like a change and decrement a counter that was never
+    // incremented.
+    const wasFeatured = current.isFeatured === true
+    const nowFeatured = args.isFeatured === true
+    const featuredChanged =
+      args.isFeatured !== undefined && nowFeatured !== wasFeatured
+    if (featuredChanged) {
+      await bumpCounter(ctx, counterKeys.spotlightFeatured(), nowFeatured ? 1 : -1)
+    }
+
+    // Status wins when both changed: it is the more consequential edit, and the
+    // old route resolved the tie the same way.
+    const actionType = statusChanged
+      ? "status_change"
+      : featuredChanged
+        ? "featured_change"
+        : "notes_update"
+
+    await logActivity(
+      ctx,
+      admin._id,
+      actionType,
+      "spotlight_application",
+      args.id,
+      {
+        status: current.status,
+        reviewerNotes: current.reviewerNotes,
+        isFeatured: wasFeatured,
+      },
+      {
+        status: args.status ?? current.status,
+        reviewerNotes: args.reviewerNotes ?? current.reviewerNotes,
+        isFeatured: args.isFeatured ?? wasFeatured,
+      },
+    )
+
+    return null
+  },
+})
+
+export const updateDonation = mutation({
+  args: {
+    id: v.id("donations"),
+    status: v.optional(donationStatus),
+    notes: v.optional(v.string()),
+    transactionReference: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const admin = await requireAdminForWrite(ctx)
+
+    const current = await ctx.db.get("donations", args.id)
+    if (!current) throw new ConvexError("Donation not found")
+
+    const now = Date.now()
+    const patch: Partial<Doc<"donations">> = { updatedAt: now }
+
+    if (args.status !== undefined) {
+      patch.status = args.status
+      // Money is moved by an offline wire transfer, so "confirmed" records who
+      // vouched for it and when. Both terminal-positive states count.
+      if (args.status === "confirmed" || args.status === "completed") {
+        patch.confirmedBy = admin._id
+        patch.confirmedAt = now
+      }
+    }
+    if (args.notes !== undefined) patch.notes = args.notes
+    if (args.transactionReference !== undefined) {
+      patch.transactionReference = args.transactionReference
+    }
+
+    await ctx.db.patch("donations", args.id, patch)
+
+    const statusChanged =
+      args.status !== undefined && args.status !== current.status
+    if (statusChanged) {
+      await bumpCounter(ctx, counterKeys.donationsByStatus(current.status), -1)
+      await bumpCounter(ctx, counterKeys.donationsByStatus(args.status!), 1)
+    }
+
+    await logActivity(
+      ctx,
+      admin._id,
+      reviewAction(statusChanged),
+      "donation",
+      args.id,
+      {
+        status: current.status,
+        notes: current.notes,
+        transactionReference: current.transactionReference,
+      },
+      {
+        status: args.status ?? current.status,
+        notes: args.notes ?? current.notes,
+        transactionReference:
+          args.transactionReference ?? current.transactionReference,
+      },
+    )
+
+    return null
+  },
+})
+
+export const updateHelpInterest = mutation({
+  args: {
+    id: v.id("helpInterests"),
+    status: v.optional(helpInterestStatus),
+    notes: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const admin = await requireAdminForWrite(ctx)
+
+    const current = await ctx.db.get("helpInterests", args.id)
+    if (!current) throw new ConvexError("Help interest not found")
+
+    const now = Date.now()
+    const patch: Partial<Doc<"helpInterests">> = { updatedAt: now }
+
+    if (args.status !== undefined) {
+      patch.status = args.status
+      // First move off "new" is the moment someone actually made contact, so
+      // that is what gets stamped. Later transitions leave it alone — it
+      // records first contact, not last touch.
+      if (args.status !== "new" && current.status === "new") {
+        patch.followedUpBy = admin._id
+        patch.followedUpAt = now
+      }
+    }
+    if (args.notes !== undefined) patch.notes = args.notes
+
+    await ctx.db.patch("helpInterests", args.id, patch)
+
+    const statusChanged =
+      args.status !== undefined && args.status !== current.status
+    if (statusChanged) {
+      await bumpCounter(
+        ctx,
+        counterKeys.helpInterestsByStatus(current.status),
+        -1,
+      )
+      await bumpCounter(ctx, counterKeys.helpInterestsByStatus(args.status!), 1)
+    }
+
+    await logActivity(
+      ctx,
+      admin._id,
+      reviewAction(statusChanged),
+      "help_interest",
+      args.id,
+      { status: current.status, notes: current.notes },
+      {
+        status: args.status ?? current.status,
+        notes: args.notes ?? current.notes,
+      },
+    )
+
+    return null
+  },
+})
+
+// ---------------------------------------------------------------------------
+// Featured students (/admin/spotlight)
+// ---------------------------------------------------------------------------
+//
+// This screen spans two tables. A featured student is either an approved
+// scholarship application with spotlightEnabled, or a spotlight application
+// with isFeatured — so the id arriving from the client belongs to one of two
+// tables and cannot be typed as a v.id() of either. It is taken as a string and
+// converted with ctx.db.normalizeId, which returns null for anything that is
+// not a well-formed id of that specific table. That check is what keeps the
+// untyped argument from becoming a way to write to an arbitrary document.
+
+const featuredSource = v.union(
+  v.literal("scholarship"),
+  v.literal("spotlight"),
+)
+
+export const setFeatured = mutation({
+  args: {
+    id: v.string(),
+    source: featuredSource,
+    featured: v.boolean(),
+  },
+  handler: async (ctx, args) => {
+    const admin = await requireAdminForWrite(ctx)
+    const now = Date.now()
+
+    if (args.source === "scholarship") {
+      const id = ctx.db.normalizeId("applications", args.id)
+      if (!id) throw new ConvexError("Invalid application id")
+
+      const current = await ctx.db.get("applications", id)
+      if (!current) throw new ConvexError("Application not found")
+
+      await ctx.db.patch("applications", id, {
+        spotlightEnabled: args.featured,
+        spotlightEnabledAt: args.featured ? now : undefined,
+        updatedAt: now,
+      })
+
+      // No counter bump, and that is not an oversight. The dashboard's
+      // "featured students" tile reads counterKeys.spotlightFeatured(), which
+      // counts spotlightApplications.isFeatured only — the Supabase stats route
+      // counted the same single table (app/api/admin/stats/route.ts:46). The
+      // scholarship side has no counter to maintain; inventing one here would
+      // make the tile disagree with the number it showed before the migration.
+      await logActivity(
+        ctx,
+        admin._id,
+        "featured_change",
+        "application",
+        id,
+        { isFeatured: current.spotlightEnabled === true },
+        { isFeatured: args.featured },
+      )
+
+      return null
+    }
+
+    const id = ctx.db.normalizeId("spotlightApplications", args.id)
+    if (!id) throw new ConvexError("Invalid spotlight application id")
+
+    const current = await ctx.db.get("spotlightApplications", id)
+    if (!current) throw new ConvexError("Spotlight application not found")
+
+    await ctx.db.patch("spotlightApplications", id, {
+      isFeatured: args.featured,
+      featuredAt: args.featured ? now : undefined,
+      updatedAt: now,
+    })
+
+    const wasFeatured = current.isFeatured === true
+    if (args.featured !== wasFeatured) {
+      await bumpCounter(ctx, counterKeys.spotlightFeatured(), args.featured ? 1 : -1)
+    }
+
+    await logActivity(
+      ctx,
+      admin._id,
+      "featured_change",
+      "spotlight_application",
+      id,
+      { isFeatured: wasFeatured },
+      { isFeatured: args.featured },
+    )
+
+    return null
+  },
+})
+
+// Featured students are hand-curated and realistically single digits; the same
+// ceiling the read side uses bounds the write side, so one drag-and-drop cannot
+// hand the transaction an arbitrarily long list of writes.
+export const reorderFeatured = mutation({
+  args: {
+    items: v.array(
+      v.object({
+        id: v.string(),
+        source: featuredSource,
+        order: v.number(),
+      }),
+    ),
+  },
+  handler: async (ctx, args) => {
+    const admin = await requireAdminForWrite(ctx)
+
+    if (args.items.length > MAX_FEATURED) {
+      throw new ConvexError(
+        `Cannot reorder more than ${MAX_FEATURED} featured students at once`,
+      )
+    }
+
+    // Every id is resolved and checked BEFORE the first write. The Supabase
+    // version fired its updates with Promise.all and inspected the errors
+    // afterwards, which could leave half the list renumbered when one id was
+    // bad. Here a bad id throws before anything is written, and even a failure
+    // partway through the loop rolls the whole mutation back — reordering is
+    // all-or-nothing.
+    const resolved = args.items.map((item) => {
+      if (item.source === "scholarship") {
+        const id = ctx.db.normalizeId("applications", item.id)
+        if (!id) throw new ConvexError(`Invalid application id: ${item.id}`)
+        return { source: "scholarship" as const, id, order: item.order }
+      }
+      const id = ctx.db.normalizeId("spotlightApplications", item.id)
+      if (!id) throw new ConvexError(`Invalid spotlight application id: ${item.id}`)
+      return { source: "spotlight" as const, id, order: item.order }
+    })
+
+    for (const item of resolved) {
+      if (item.source === "scholarship") {
+        await ctx.db.patch("applications", item.id, {
+          spotlightOrder: item.order,
+        })
+      } else {
+        await ctx.db.patch("spotlightApplications", item.id, {
+          featuredOrder: item.order,
+        })
+      }
+    }
+
+    // Ordering does not change any counted bucket, so no counter work here.
+    await logActivity(
+      ctx,
+      admin._id,
+      "spotlight_reorder",
+      "spotlight",
+      "batch",
+      null,
+      { reorder: args.items },
+    )
+
+    return null
+  },
+})

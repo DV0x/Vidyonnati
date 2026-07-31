@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { motion, AnimatePresence } from "motion/react"
@@ -16,8 +16,22 @@ import {
 } from "lucide-react"
 import { SpotlightStepProgress } from "./SpotlightStepProgress"
 import { getSpotlightStepFields } from "@/lib/schemas/spotlight"
+import {
+  asIncomeBracket,
+  requiredNumber,
+  requiredOption,
+} from "@/lib/formCoercion"
+import {
+  currentStatusOptions,
+  parentStatusOptions,
+} from "@/lib/schemas/spotlight"
 import { useAuth } from "@/app/context/AuthContext"
-import type { SpotlightDocumentType } from "@/types/database"
+import { useMutation, useQuery } from "convex/react"
+import { api } from "@/convex/_generated/api"
+import type { Id, Doc } from "@/convex/_generated/dataModel"
+import { convexErrorMessage, convexErrorData } from "@/lib/convexError"
+// Derived from the Convex schema — see the note in ApplicationWizard.
+type SpotlightDocumentType = Doc<"spotlightDocuments">["documentType"]
 
 import { PersonalInfoStep } from "./steps/PersonalInfoStep"
 import { EducationStep } from "./steps/EducationStep"
@@ -47,44 +61,20 @@ interface SpotlightWizardProps {
 }
 
 // Field mapping: DB snake_case → form camelCase
-const DB_TO_FORM_MAP: Record<string, string> = {
-  full_name: 'fullName',
-  date_of_birth: 'dateOfBirth',
-  gender: 'gender',
-  phone: 'phone',
-  email: 'email',
-  village: 'village',
-  mandal: 'mandal',
-  district: 'district',
-  state: 'state',
-  pincode: 'pincode',
-  college_name: 'collegeName',
-  course_stream: 'courseStream',
-  year_of_completion: 'yearOfCompletion',
-  total_marks: 'totalMarks',
-  max_marks: 'maxMarks',
-  percentage: 'percentage',
-  current_status: 'currentStatus',
-  competitive_exams: 'competitiveExams',
-  parent_status: 'parentStatus',
-  mother_name: 'motherName',
-  mother_occupation: 'motherOccupation',
-  mother_health: 'motherHealth',
-  father_name: 'fatherName',
-  father_occupation: 'fatherOccupation',
-  father_health: 'fatherHealth',
-  guardian_name: 'guardianName',
-  guardian_relationship: 'guardianRelationship',
-  guardian_details: 'guardianDetails',
-  siblings_count: 'siblingsCount',
-  annual_family_income: 'annualFamilyIncome',
-  circumstances: 'circumstances',
-  circumstances_other: 'circumstancesOther',
-  background_story: 'backgroundStory',
-  dreams_goals: 'dreamsGoals',
-  how_help_changes_life: 'howHelpChangesLife',
-  annual_financial_need: 'annualFinancialNeed',
-}
+// Convex documents are camelCase and every form field matches its document
+// field name, so the old snake_case→camelCase table is now just a field list.
+const EDITABLE_FORM_FIELDS = [
+  'fullName', 'dateOfBirth', 'gender', 'phone', 'email',
+  'village', 'mandal', 'district', 'state', 'pincode',
+  'collegeName', 'courseStream', 'yearOfCompletion', 'totalMarks', 'maxMarks',
+  'percentage', 'currentStatus', 'competitiveExams',
+  'parentStatus', 'motherName', 'motherOccupation', 'motherHealth',
+  'fatherName', 'fatherOccupation', 'fatherHealth',
+  'guardianName', 'guardianRelationship', 'guardianDetails',
+  'siblingsCount', 'annualFamilyIncome',
+  'circumstances', 'circumstancesOther',
+  'backgroundStory', 'dreamsGoals', 'howHelpChangesLife', 'annualFinancialNeed',
+] as const
 
 export function SpotlightWizard({ editApplicationId }: SpotlightWizardProps) {
   const router = useRouter()
@@ -95,10 +85,6 @@ export function SpotlightWizard({ editApplicationId }: SpotlightWizardProps) {
   const [isSaving, setIsSaving] = useState(false)
   const [spotlightId, setSpotlightId] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
-  const [isLoadingEdit, setIsLoadingEdit] = useState(!!editApplicationId)
-  const [editDbId, setEditDbId] = useState<string | null>(null)
-  const [existingDocuments, setExistingDocuments] = useState<{document_type: string, file_name: string}[]>([])
-
   const isEditMode = !!editApplicationId
 
   const methods = useForm({
@@ -163,58 +149,54 @@ export function SpotlightWizard({ editApplicationId }: SpotlightWizardProps) {
 
   const { trigger, getValues, reset, setValue } = methods
 
-  // Fetch existing application data in edit mode
+  const createSpotlight = useMutation(api.spotlight.create)
+  const updateSpotlight = useMutation(api.spotlight.update)
+  const generateUploadUrl = useMutation(api.documents.generateUploadUrl)
+  const attachSpotlightDocument = useMutation(api.documents.attachSpotlightDocument)
+
+  // Existing application, in edit mode. See the matching note in
+  // ApplicationWizard: "skip" when not editing, undefined while loading, null
+  // when missing or not yours (deliberately indistinguishable).
+  const editApplication = useQuery(
+    api.spotlight.mineById,
+    editApplicationId
+      ? { spotlightApplicationId: editApplicationId as Id<'spotlightApplications'> }
+      : 'skip',
+  )
+
+  // Derived rather than stored — see the matching note in ApplicationWizard.
+  const isLoadingEdit = isEditMode && editApplication === undefined
+  const editDbId = editApplication?._id ?? null
+  const editLoadFailed = isEditMode && editApplication === null
+  const existingDocuments = useMemo(
+    () =>
+      editApplication?.documents.map((d) => ({
+        document_type: d.documentType,
+        file_name: d.fileName,
+      })) ?? [],
+    [editApplication],
+  )
+
   useEffect(() => {
-    if (!editApplicationId) return
+    if (!editApplication) return
 
-    async function fetchEditData() {
-      setIsLoadingEdit(true)
-      try {
-        const res = await fetch(`/api/student/spotlight/${editApplicationId}`)
-        if (!res.ok) {
-          setSubmitError('Failed to load application for editing')
-          setIsLoadingEdit(false)
-          return
-        }
-
-        const data = await res.json()
-
-        // Store the DB id and documents
-        setEditDbId(data.id)
-        if (data.spotlight_documents) {
-          setExistingDocuments(data.spotlight_documents.map((d: { document_type: string; file_name: string }) => ({
-            document_type: d.document_type,
-            file_name: d.file_name,
-          })))
-        }
-
-        // Map DB fields to form fields
-        const formData: Record<string, unknown> = {}
-        for (const [dbKey, formKey] of Object.entries(DB_TO_FORM_MAP)) {
-          if (data[dbKey] !== null && data[dbKey] !== undefined) {
-            formData[formKey] = data[dbKey]
-          }
-        }
-
-        reset((prev) => ({ ...prev, ...formData }))
-      } catch {
-        setSubmitError('Failed to load application for editing')
-      } finally {
-        setIsLoadingEdit(false)
-      }
+    const formData: Record<string, unknown> = {}
+    for (const field of EDITABLE_FORM_FIELDS) {
+      const value = (editApplication as unknown as Record<string, unknown>)[field]
+      if (value !== undefined && value !== null) formData[field] = value
     }
 
-    fetchEditData()
-  }, [editApplicationId, reset])
+    reset((prev) => ({ ...prev, ...formData }))
+  }, [editApplication, reset])
 
   // Pre-fill form with student profile data (skip in edit mode)
   useEffect(() => {
     if (isEditMode) return
     if (student) {
-      if (student.full_name) setValue("fullName", student.full_name)
+      if (student.fullName) setValue("fullName", student.fullName)
       if (student.email) setValue("email", student.email)
       if (student.phone) setValue("phone", student.phone)
-      if (student.date_of_birth) setValue("dateOfBirth", student.date_of_birth)
+      if (student.dateOfBirth) setValue("dateOfBirth", student.dateOfBirth)
       if (student.gender && (student.gender === "male" || student.gender === "female")) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         setValue("gender", student.gender as any)
@@ -330,28 +312,34 @@ export function SpotlightWizard({ editApplicationId }: SpotlightWizardProps) {
     window.scrollTo({ top: 0, behavior: "smooth" })
   }
 
-  // Upload a document
+  // Upload a document. Three steps rather than one POST — see the matching
+  // note in ApplicationWizard. Type and size are enforced in the attach step
+  // from Convex's own record of the stored file, not from anything sent here.
   const uploadDocument = async (
-    applicationId: string,
+    applicationId: Id<'spotlightApplications'>,
     file: File,
-    documentType: SpotlightDocumentType
+    documentType: SpotlightDocumentType,
   ) => {
-    const formData = new FormData()
-    formData.append("file", file)
-    formData.append("applicationId", applicationId)
-    formData.append("documentType", documentType)
+    const uploadUrl = await generateUploadUrl()
 
-    const response = await fetch("/api/upload/spotlight", {
+    const result = await fetch(uploadUrl, {
       method: "POST",
-      body: formData,
+      headers: { "Content-Type": file.type },
+      body: file,
     })
 
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.error || `Failed to upload ${documentType}`)
+    if (!result.ok) {
+      throw new Error(`Failed to upload ${documentType}`)
     }
 
-    return response.json()
+    const { storageId } = (await result.json()) as { storageId: Id<'_storage'> }
+
+    return attachSpotlightDocument({
+      spotlightApplicationId: applicationId,
+      documentType,
+      storageId,
+      fileName: file.name,
+    })
   }
 
   const handleSubmit = async () => {
@@ -389,11 +377,13 @@ export function SpotlightWizard({ editApplicationId }: SpotlightWizardProps) {
         }
       }
 
-      // Prepare application data
-      const applicationData: Record<string, unknown> = {
-        full_name: data.fullName,
-        date_of_birth: data.dateOfBirth,
-        gender: data.gender || null,
+      // Field names match the mutation arguments exactly now. Empty optionals
+      // become undefined rather than null — Convex optionals are absent or
+      // present, and its validators reject null as a distinct value.
+      const applicationData = {
+        fullName: data.fullName,
+        dateOfBirth: data.dateOfBirth,
+        gender: data.gender || undefined,
         phone: data.phone,
         email: data.email,
         village: data.village,
@@ -403,94 +393,80 @@ export function SpotlightWizard({ editApplicationId }: SpotlightWizardProps) {
         pincode: data.pincode,
 
         // Education
-        college_name: data.collegeName,
-        course_stream: data.courseStream,
-        year_of_completion: data.yearOfCompletion,
-        total_marks: data.totalMarks,
-        max_marks: data.maxMarks,
-        percentage: data.percentage,
-        current_status: data.currentStatus,
+        collegeName: data.collegeName,
+        courseStream: data.courseStream,
+        yearOfCompletion: requiredNumber(data.yearOfCompletion, "Year of completion"),
+        totalMarks: requiredNumber(data.totalMarks, "Total marks"),
+        maxMarks: requiredNumber(data.maxMarks, "Maximum marks"),
+        percentage: requiredNumber(data.percentage, "Percentage"),
+        currentStatus: requiredOption(
+          data.currentStatus,
+          currentStatusOptions,
+          "Current status",
+        ),
 
         // Competitive Exams
-        competitive_exams: data.competitiveExams.length > 0 ? data.competitiveExams : null,
+        competitiveExams:
+          data.competitiveExams.length > 0 ? data.competitiveExams : undefined,
 
         // Family Background
-        parent_status: data.parentStatus,
-        mother_name: data.motherName || null,
-        mother_occupation: data.motherOccupation || null,
-        mother_health: data.motherHealth || null,
-        father_name: data.fatherName || null,
-        father_occupation: data.fatherOccupation || null,
-        father_health: data.fatherHealth || null,
-        guardian_name: data.guardianName || null,
-        guardian_relationship: data.guardianRelationship || null,
-        guardian_details: data.guardianDetails || null,
-        siblings_count: data.siblingsCount || null,
-        annual_family_income: data.annualFamilyIncome || null,
+        parentStatus: requiredOption(
+          data.parentStatus,
+          parentStatusOptions,
+          "Parent status",
+        ),
+        motherName: data.motherName || undefined,
+        motherOccupation: data.motherOccupation || undefined,
+        motherHealth: data.motherHealth || undefined,
+        fatherName: data.fatherName || undefined,
+        fatherOccupation: data.fatherOccupation || undefined,
+        fatherHealth: data.fatherHealth || undefined,
+        guardianName: data.guardianName || undefined,
+        guardianRelationship: data.guardianRelationship || undefined,
+        guardianDetails: data.guardianDetails || undefined,
+        siblingsCount: data.siblingsCount || undefined,
+        annualFamilyIncome: asIncomeBracket(data.annualFamilyIncome),
 
         // Circumstances
         circumstances: data.circumstances,
-        circumstances_other: data.circumstancesOther || null,
+        circumstancesOther: data.circumstancesOther || undefined,
 
         // Story & Goals
-        background_story: data.backgroundStory,
-        dreams_goals: data.dreamsGoals,
-        how_help_changes_life: data.howHelpChangesLife,
-        annual_financial_need: data.annualFinancialNeed,
+        backgroundStory: data.backgroundStory,
+        dreamsGoals: data.dreamsGoals,
+        howHelpChangesLife: data.howHelpChangesLife,
+        annualFinancialNeed: requiredNumber(
+          data.annualFinancialNeed,
+          "Annual financial need",
+        ),
       }
 
-      let appId: string
+      let appId: Id<'spotlightApplications'>
       let applicationSpotlightId: string
 
       if (isEditMode && editDbId) {
-        // PATCH existing application
-        const response = await fetch(`/api/student/spotlight/${editDbId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(applicationData),
-        })
-
-        if (!response.ok) {
-          const errorData = await response.json()
-          throw new Error(errorData.error || "Failed to update application")
-        }
-
-        const application = await response.json()
-        appId = application.id
-        applicationSpotlightId = application.spotlight_id
+        const result = await updateSpotlight({ id: editDbId, ...applicationData })
+        appId = result.id
+        applicationSpotlightId = result.spotlightId
       } else {
-        // Submit new application (or get existing one)
-        const response = await fetch("/api/student/spotlight", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(applicationData),
-        })
-
-        if (!response.ok) {
-          const errorData = await response.json()
-
-          // If application already exists, fetch it and use for document uploads
-          if (response.status === 409 && errorData.existingApplicationId) {
-            const existingResponse = await fetch("/api/student/spotlight")
-            if (!existingResponse.ok) {
-              throw new Error("Failed to fetch existing application")
-            }
-            const existingApps = await existingResponse.json()
-            const existingApp = existingApps.find(
-              (app: { spotlight_id: string }) => app.spotlight_id === errorData.existingApplicationId
-            )
-            if (!existingApp) {
-              throw new Error("Could not find existing application")
-            }
-            appId = existingApp.id
-            applicationSpotlightId = existingApp.spotlight_id
+        try {
+          const result = await createSpotlight(applicationData)
+          appId = result.id
+          applicationSpotlightId = result.spotlightId
+        } catch (error) {
+          // A student who already has an application in flight still gets their
+          // uploads attached to it rather than losing them — the same recovery
+          // the old 409-then-refetch branch performed, minus the round trip,
+          // because both ids ride along on the error.
+          const info = convexErrorData(error) as
+            | { code?: string; existingApplicationId?: string; existingId?: string }
+            | null
+          if (info?.code === "DUPLICATE_SPOTLIGHT" && info.existingId && info.existingApplicationId) {
+            appId = info.existingId as Id<'spotlightApplications'>
+            applicationSpotlightId = info.existingApplicationId
           } else {
-            throw new Error(errorData.error || "Failed to submit application")
+            throw error
           }
-        } else {
-          const application = await response.json()
-          appId = application.id
-          applicationSpotlightId = application.spotlight_id
         }
       }
 
@@ -543,9 +519,7 @@ export function SpotlightWizard({ editApplicationId }: SpotlightWizardProps) {
     } catch (error) {
       console.error("Spotlight submission error:", error)
       setSubmitError(
-        error instanceof Error
-          ? error.message
-          : "Something went wrong. Please try again."
+        convexErrorMessage(error, "Something went wrong. Please try again."),
       )
     } finally {
       setIsSubmitting(false)
@@ -709,6 +683,18 @@ export function SpotlightWizard({ editApplicationId }: SpotlightWizardProps) {
         </div>
 
         {/* Error Display */}
+        {editLoadFailed && (
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-red-600">
+                This application could not be loaded for editing. It may have been
+                removed, or it belongs to a different account.
+              </p>
+            </div>
+          </div>
+        )}
+
         {submitError && (
           <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />

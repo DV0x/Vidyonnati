@@ -9,7 +9,8 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
-import { useQuery } from 'convex/react'
+import { useQuery, useMutation } from 'convex/react'
+import { convexErrorMessage } from '@/lib/convexError'
 import type { FunctionReturnType } from 'convex/server'
 import { api } from '@/convex/_generated/api'
 import { toast } from 'sonner'
@@ -35,31 +36,26 @@ export default function SpotlightManagementPage() {
   const isLoading = featured === undefined
   const [isSaving, setIsSaving] = useState(false)
 
+  const setFeatured = useMutation(api.admin.setFeatured)
+  const reorderFeatured = useMutation(api.admin.reorderFeatured)
+
   const scholarshipCount = students.filter((s) => s.source === 'scholarship').length
   const spotlightCount = students.filter((s) => s.source === 'spotlight').length
 
   const handleToggleFeatured = async (student: FeaturedStudent) => {
     const newFeatured = !student.isFeatured
 
-    // STILL SUPABASE, STILL 401. Writes are Phase 3. The optimistic update that
-    // used to be here is deliberately gone: the list is a live query now, so the
-    // mutation will push the change rather than the client guessing at it.
-    const res = await fetch('/api/admin/spotlight', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        toggleFeatured: {
-          id: student.id,
-          source: student.source,
-          featured: newFeatured,
-        },
-      }),
-    })
-
-    if (res.ok) {
+    // No optimistic update: the list is a live query, so the mutation pushes
+    // the change rather than the client guessing at it.
+    try {
+      await setFeatured({
+        id: student.id,
+        source: student.source,
+        featured: newFeatured,
+      })
       toast.success(newFeatured ? 'Student featured' : 'Student removed from spotlight')
-    } else {
-      toast.error('Failed to update')
+    } catch (error) {
+      toast.error(convexErrorMessage(error, 'Failed to update'))
     }
   }
 
@@ -99,22 +95,26 @@ export default function SpotlightManagementPage() {
     await saveOrder(reorderItems)
   }
 
-  const saveOrder = async (reorderItems: Array<{ id: string; source: string; order: number }>) => {
+  // `source` is the narrowed union rather than `string`: the mutation validates
+  // it against v.union(...), so a widened type here would only defer the error
+  // to runtime.
+  const saveOrder = async (
+    reorderItems: Array<{
+      id: string
+      source: FeaturedStudent['source']
+      order: number
+    }>,
+  ) => {
     setIsSaving(true)
 
-    const res = await fetch('/api/admin/spotlight', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ reorder: reorderItems }),
-    })
-
-    if (res.ok) {
+    try {
+      await reorderFeatured({ items: reorderItems })
       toast.success('Order saved')
-    } else {
-      toast.error('Failed to save order')
+    } catch (error) {
+      toast.error(convexErrorMessage(error, 'Failed to save order'))
+    } finally {
+      setIsSaving(false)
     }
-
-    setIsSaving(false)
   }
 
   return (
