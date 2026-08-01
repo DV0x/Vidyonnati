@@ -65,12 +65,38 @@ The chain standing between here and a production Google sign-in:
 
 | # | Step | State |
 |---|---|---|
-| 1 | Create the **production Convex deployment** | does not exist |
-| 2 | Set `CLERK_JWT_ISSUER_DOMAIN` on it to the **production** Clerk issuer (`clerk.vidyonnatifoundation.org`), not the dev one | — |
-| 3 | Seed the `hello@vidyonnatifoundation.org` admin row there (prod starts empty) | — |
-| 4 | Set Vercel env vars: `pk_live`/`sk_live`, prod `NEXT_PUBLIC_CONVEX_URL`, prod `NEXT_PUBLIC_CONVEX_SITE_URL`, `CONVEX_DEPLOY_KEY`; and `ALLOWED_WEB_ORIGINS` on the prod **Convex** deployment | none set |
-| 5 | Deploy — **Convex functions before the frontend**, per CLAUDE.md | — |
-| 6 | Actually sign in with Google on production | — |
+| 1 | Create the **production Convex deployment** | ✅ `amicable-narwhal-186` |
+| 2 | Set `CLERK_JWT_ISSUER_DOMAIN` on it to the **production** Clerk issuer (`clerk.vidyonnatifoundation.org`), not the dev one | ✅ set, plus `ALLOWED_WEB_ORIGINS` |
+| 3 | Seed the `hello@vidyonnatifoundation.org` admin row there (prod starts empty) | ❌ **still to do** — see below |
+| 4 | Set Vercel env vars: `pk_live`/`sk_live`, prod `NEXT_PUBLIC_CONVEX_URL`, prod `NEXT_PUBLIC_CONVEX_SITE_URL`, `CONVEX_DEPLOY_KEY` | ❌ none set |
+| 5 | Deploy — **Convex functions before the frontend**, per CLAUDE.md | ⬜ Convex side ✅ done; frontend not deployed |
+| 6 | Actually sign in with Google on production | ⬜ |
+
+### Step 3: seeding the prod admin row
+
+**Nothing in the codebase inserts into `admins`** — the dev row was created by
+hand. So this is a manual step, by design: an admin row is a privilege grant and
+there is deliberately no function that mints one.
+
+Do it from the Convex dashboard's data browser on `amicable-narwhal-186`, or:
+
+```
+npx convex import --table admins --prod --format jsonLines admins.jsonl
+```
+
+with a single line, and **no** `tokenIdentifier` or `clerkUserId`:
+
+```json
+{"email": "hello@vidyonnatifoundation.org", "name": "Vidyonnati Foundation", "role": "super_admin"}
+```
+
+Leaving both identity fields out is the point. `lookupAdmin` falls through to
+the email match, and `requireAdminForWrite` binds the real Clerk identity on the
+first authenticated write. Dev's row is bound to the fake `user_testadmin`
+precisely because it was seeded with one; prod should not repeat that.
+
+Until this row exists, **`/admin` on production rejects everyone**, including
+`hello@vidyonnatifoundation.org`.
 
 **Cheaper fallback worth checking first:** the goal is only to make Google see
 the client used. Clerk's hosted Account Portal on the *production* instance may
@@ -135,7 +161,8 @@ both. Details under "Wizard validation" below.
 |---|---|
 | Convex team / project | `vidyonnati-fondation` / `vidyonnati-foundation` |
 | Convex **dev** deployment | `dev:unique-dodo-576` → `https://unique-dodo-576.convex.cloud` |
-| Convex **prod** deployment | **does not exist yet** |
+| Convex **prod** deployment | `amicable-narwhal-186` → `https://amicable-narwhal-186.convex.cloud` — **created in session 5, functions deployed, env vars set.** Site origin `https://amicable-narwhal-186.convex.site`. Data is empty except that the **admin row is still not seeded** (see below). |
+| Convex env vars (prod) | `CLERK_JWT_ISSUER_DOMAIN=https://clerk.vidyonnatifoundation.org` · `ALLOWED_WEB_ORIGINS=https://vidyonnatifoundation.org,https://www.vidyonnatifoundation.org` — both set and verified with `npx convex env list --prod` |
 | Convex env vars (dev) | `CLERK_JWT_ISSUER_DOMAIN=https://close-garfish-21.clerk.accounts.dev`. `ALLOWED_WEB_ORIGINS` is **unset**, which is fine in dev — `convex/http.ts` defaults to `http://localhost:3000`. Production must set it explicitly. |
 | Convex **site** origin (dev) | `https://unique-dodo-576.convex.site` — where HTTP actions are served, a different host from `.convex.cloud`. In `.env.local` as `NEXT_PUBLIC_CONVEX_SITE_URL`; needed on Vercel too. |
 | Clerk **dev** instance | `close-garfish-21.clerk.accounts.dev` |
@@ -981,11 +1008,51 @@ job deliberately rather than reflexively.
   Phase 4 section below.** Kept here only as a pointer, because three earlier
   phases deliberately refused to settle it and that history is the reason the
   answer is what it is.
-- **Production Convex deployment** does not exist; when created it starts empty
-  and needs the `hello@vidyonnatifoundation.org` admin row seeded again, plus
-  `CLERK_JWT_ISSUER_DOMAIN` set to the **production** issuer.
-- **Vercel env vars** not set: `pk_live`/`sk_live`, prod `NEXT_PUBLIC_CONVEX_URL`,
-  `CONVEX_DEPLOY_KEY`.
+- ~~Production Convex deployment does not exist.~~ **Created in session 5** —
+  `amicable-narwhal-186`, functions deployed, both env vars set. The
+  `hello@vidyonnatifoundation.org` admin row is **still unseeded**; see step 3
+  of the chain above.
+- **Vercel env vars** not set: `pk_live`/`sk_live`, prod
+  `NEXT_PUBLIC_CONVEX_URL`, prod `NEXT_PUBLIC_CONVEX_SITE_URL`,
+  `CONVEX_DEPLOY_KEY`. The full list, with the one that is *not* auto-injected
+  called out, is in the Vercel section below.
+
+## Vercel configuration (still to do)
+
+Five variables, all on **Production** scope. Nothing here is set yet.
+
+| Variable | Value | Where it comes from |
+|---|---|---|
+| `NEXT_PUBLIC_CONVEX_URL` | `https://amicable-narwhal-186.convex.cloud` | Convex prod deployment |
+| `NEXT_PUBLIC_CONVEX_SITE_URL` | `https://amicable-narwhal-186.convex.site` | same deployment, `.site` host |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | `pk_live_…` | Clerk **production** dashboard |
+| `CLERK_SECRET_KEY` | `sk_live_…` | Clerk **production** dashboard |
+| `CONVEX_DEPLOY_KEY` | a prod deploy key | Convex dashboard → Settings → Deploy keys |
+
+Those five are the whole list. The app reads only `NEXT_PUBLIC_CONVEX_URL` and
+`NEXT_PUBLIC_CONVEX_SITE_URL` directly; the two Clerk keys are read by
+`@clerk/nextjs` itself. **`NEXT_PUBLIC_APP_URL` is not needed** — it survives
+only in a comment in `lib/site.ts` explaining why the canonical origin is a
+constant instead. Setting it would do nothing.
+
+### The build command, and why it matters
+
+Set the Vercel build command to:
+
+```
+npx convex deploy --cmd 'npm run build'
+```
+
+This is what mechanically enforces CLAUDE.md's "deploy Convex functions before
+the frontend" rule: `convex deploy` pushes functions and only then runs the
+build, and if the push fails the build never runs. `CONVEX_DEPLOY_KEY` is what
+tells it which deployment to target.
+
+⚠️ **`--cmd` injects `NEXT_PUBLIC_CONVEX_URL` automatically** (verified in
+`npx convex deploy --help`: `--cmd-url-env-var-name`, auto-detected for Next.js)
+— but **`NEXT_PUBLIC_CONVEX_SITE_URL` is a variable this project invented in
+Phase 4 and nothing injects it.** Set it by hand or every private-document
+download on production fails.
 - **No test suite.** Real gap for a system holding bank details; deliberately
   out of scope during the migration.
 
