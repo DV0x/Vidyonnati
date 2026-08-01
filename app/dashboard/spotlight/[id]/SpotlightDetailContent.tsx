@@ -30,7 +30,11 @@ import {
   Phone,
   Mail,
   Pencil,
+  Download,
+  Loader2,
 } from "lucide-react"
+import { toast } from "sonner"
+import { useDocumentDownload } from "@/hooks/use-document-download"
 import {
   parentStatusLabels,
   currentStatusLabels,
@@ -517,24 +521,7 @@ export default function SpotlightDetailContent({
             application.documents.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {application.documents.map((doc) => (
-                  <div
-                    key={doc._id}
-                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200"
-                  >
-                    <div className="flex items-center gap-3">
-                      <FileText className="w-5 h-5 text-gray-400" />
-                      <div>
-                        <p className="text-sm font-medium text-gray-900 capitalize">
-                          {doc.documentType.replace("_", " ")}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {(doc.fileSize / 1024).toFixed(1)} KB
-                        </p>
-                      </div>
-                    </div>
-                    {/* Download lands in Phase 4 with the private-document
-                        decision; see the note in the scholarship detail page. */}
-                  </div>
+                  <DocumentRow key={doc._id} document={doc} />
                 ))}
               </div>
             ) : (
@@ -543,6 +530,48 @@ export default function SpotlightDetailContent({
           </CardContent>
         </Card>
       </motion.div>
+    </div>
+  )
+}
+
+type SpotlightDocumentRow = NonNullable<
+  FunctionReturnType<typeof api.spotlight.mineById>
+>['documents'][number]
+
+function DocumentRow({ document: doc }: { document: SpotlightDocumentRow }) {
+  const { download, pendingId } = useDocumentDownload()
+  const isPending = pendingId === doc._id
+
+  return (
+    <div className="flex items-center justify-between gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+      <div className="flex items-center gap-3 min-w-0">
+        <FileText className="w-5 h-5 text-gray-400 shrink-0" />
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-gray-900 capitalize truncate">
+            {doc.documentType.replace("_", " ")}
+          </p>
+          <p className="text-xs text-gray-500">
+            {(doc.fileSize / 1024).toFixed(1)} KB
+          </p>
+        </div>
+      </div>
+      <Button
+        variant="outline"
+        size="sm"
+        className="shrink-0"
+        disabled={isPending}
+        onClick={async () => {
+          const failure = await download("spotlight", doc._id, doc.fileName)
+          if (failure) toast.error(failure)
+        }}
+      >
+        {isPending ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <Download className="h-4 w-4" />
+        )}
+        Download
+      </Button>
     </div>
   )
 }

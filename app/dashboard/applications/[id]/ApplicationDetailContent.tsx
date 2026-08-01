@@ -26,7 +26,11 @@ import {
   Users,
   BookOpen,
   Pencil,
+  Download,
+  Loader2,
 } from 'lucide-react'
+import { toast } from 'sonner'
+import { useDocumentDownload } from '@/hooks/use-document-download'
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
 
 type ApplicationDetail = NonNullable<
@@ -522,8 +526,11 @@ function StatusTimeline({ status }: { status: string }) {
 }
 
 function DocumentRow({ document }: { document: ApplicationDocumentRow }) {
+  const { download, pendingId } = useDocumentDownload()
+  const isPending = pendingId === document._id
+
   return (
-    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg gap-3">
       <div className="flex items-center gap-3 min-w-0">
         <FileText className="h-5 w-5 text-gray-400 shrink-0" />
         <div className="min-w-0">
@@ -533,14 +540,31 @@ function DocumentRow({ document }: { document: ApplicationDocumentRow }) {
           <p className="text-xs text-gray-500 truncate">{document.fileName}</p>
         </div>
       </div>
-      {/* No download link yet. Serving these files is Phase 4, where the open
-          decision between permanent storage.getUrl() capability URLs and a
-          token-authorized HTTP action gets made — these are Aadhaar cards and
-          bank passbooks. Showing a dead button would be worse than showing
-          none, so the row lists the file and stops there. */}
-      <span className="text-xs text-gray-400 shrink-0">
-        {Math.round(document.fileSize / 1024)} KB
-      </span>
+      <div className="flex items-center gap-3 shrink-0">
+        <span className="text-xs text-gray-400">
+          {Math.round(document.fileSize / 1024)} KB
+        </span>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={isPending}
+          onClick={async () => {
+            const failure = await download(
+              'application',
+              document._id,
+              document.fileName,
+            )
+            if (failure) toast.error(failure)
+          }}
+        >
+          {isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Download className="h-4 w-4" />
+          )}
+          Download
+        </Button>
+      </div>
     </div>
   )
 }

@@ -15,6 +15,7 @@ import type * as documents from "../documents.js";
 import type * as donations from "../donations.js";
 import type * as featured from "../featured.js";
 import type * as helpInterests from "../helpInterests.js";
+import type * as http from "../http.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_counters from "../lib/counters.js";
 import type * as lib_ids from "../lib/ids.js";
@@ -38,6 +39,7 @@ declare const fullApi: ApiFromModules<{
   donations: typeof donations;
   featured: typeof featured;
   helpInterests: typeof helpInterests;
+  http: typeof http;
   "lib/auth": typeof lib_auth;
   "lib/counters": typeof lib_counters;
   "lib/ids": typeof lib_ids;

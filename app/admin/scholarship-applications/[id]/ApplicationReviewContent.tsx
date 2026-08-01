@@ -41,7 +41,12 @@ import {
   BookOpen,
   Save,
   Loader2,
+  Download,
 } from 'lucide-react'
+import {
+  useDocumentDownload,
+  useDocumentObjectUrl,
+} from '@/hooks/use-document-download'
 
 type ApplicationReview = NonNullable<
   FunctionReturnType<typeof api.admin.application>
@@ -265,9 +270,7 @@ export default function ApplicationReviewContent({
         </Card>
       </motion.div>
 
-      {/* Student photo intentionally not rendered yet. It needs a storage URL,
-          and minting those is Phase 4 — the same decision that governs the
-          Aadhaar and passbook documents below. */}
+      <StudentPhoto documents={application.documents} name={application.fullName} />
 
       {/* Application Details */}
       <div className="grid gap-6 lg:grid-cols-2">
@@ -550,24 +553,101 @@ function InfoRow({
   )
 }
 
-function DocumentRow({ document }: { document: ApplicationDocumentRow }) {
+// The applicant's photo, fetched through the authorized route like every other
+// document. It cannot use the plain storage URL that featured.ts and the
+// /admin/spotlight list use: those only ever render FEATURED entries, whose
+// photos are published on the homepage anyway. An applicant under review is
+// usually not featured, so their photo has never been public.
+function StudentPhoto({
+  documents,
+  name,
+}: {
+  documents: ApplicationDocumentRow[]
+  name: string
+}) {
+  const photo = documents.find((doc) => doc.documentType === 'student_photo')
+  const { url, error } = useDocumentObjectUrl('application', photo?._id ?? null)
+
+  if (!photo) return null
+
   return (
-    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, delay: 0.2 }}
+    >
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <User className="h-5 w-5 text-primary" />
+            Student Photo
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="relative h-40 w-32 overflow-hidden rounded-lg border bg-gray-100">
+            {url ? (
+              // unoptimized because a blob: URL cannot be proxied by the image
+              // optimizer — and needs no proxying, the bytes are already here.
+              <Image
+                src={url}
+                alt={`Photo of ${name}`}
+                fill
+                unoptimized
+                className="object-cover"
+              />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center">
+                {error ? (
+                  <AlertCircle className="h-6 w-6 text-gray-400" />
+                ) : (
+                  <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+                )}
+              </div>
+            )}
+          </div>
+          {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
+        </CardContent>
+      </Card>
+    </motion.div>
+  )
+}
+
+function DocumentRow({ document: doc }: { document: ApplicationDocumentRow }) {
+  const { download, pendingId } = useDocumentDownload()
+  const isPending = pendingId === doc._id
+
+  return (
+    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg gap-3">
       <div className="flex items-center gap-3 min-w-0">
         <FileText className="h-5 w-5 text-gray-400 shrink-0" />
         <div className="min-w-0">
           <p className="text-sm font-medium text-gray-900 truncate">
-            {documentTypeLabels[document.documentType] || document.documentType}
+            {documentTypeLabels[doc.documentType] || doc.documentType}
           </p>
-          <p className="text-xs text-gray-500 truncate">{document.fileName}</p>
+          <p className="text-xs text-gray-500 truncate">{doc.fileName}</p>
         </div>
       </div>
-      {/* No download link: serving these files is Phase 4, where the choice
-          between permanent storage.getUrl() capability URLs and a
-          token-authorized HTTP action gets made. */}
-      <span className="text-xs text-gray-400 shrink-0">
-        {Math.round(document.fileSize / 1024)} KB
-      </span>
+      <div className="flex items-center gap-3 shrink-0">
+        <span className="text-xs text-gray-400">
+          {Math.round(doc.fileSize / 1024)} KB
+        </span>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={isPending}
+          onClick={async () => {
+            const failure = await download('application', doc._id, doc.fileName)
+            if (failure) toast.error(failure)
+          }}
+        >
+          {isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Download className="h-4 w-4" />
+          )}
+          Download
+        </Button>
+      </div>
     </div>
   )
 }

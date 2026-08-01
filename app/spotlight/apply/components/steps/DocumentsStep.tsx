@@ -2,11 +2,15 @@
 
 import { useFormContext } from "react-hook-form"
 import { FileUpload } from "@/app/components/FileUpload"
-import { FileText, Check, Info, CheckCircle2 } from "lucide-react"
+import { FileText, Check, Info } from "lucide-react"
+import {
+  ExistingDocBadge,
+  type ExistingDocument,
+} from "@/app/components/ExistingDocuments"
 
 interface DocumentsStepProps {
   editMode?: boolean
-  existingDocuments?: { document_type: string; file_name: string }[]
+  existingDocuments?: ExistingDocument[]
 }
 
 export function DocumentsStep({ editMode, existingDocuments = [] }: DocumentsStepProps) {
@@ -55,7 +59,7 @@ export function DocumentsStep({ editMode, existingDocuments = [] }: DocumentsSte
             error={errors.marksheet?.message as string}
             description="10th, 12th, or latest semester"
           />
-          <ExistingDocBadge doc={getExistingDoc("marksheet")} />
+          <ExistingDocBadge kind="spotlight" doc={getExistingDoc("marksheet")} />
         </div>
 
         {/* Aadhar */}
@@ -70,7 +74,7 @@ export function DocumentsStep({ editMode, existingDocuments = [] }: DocumentsSte
             error={errors.aadhar?.message as string}
             description="Front and back"
           />
-          <ExistingDocBadge doc={getExistingDoc("aadhar")} />
+          <ExistingDocBadge kind="spotlight" doc={getExistingDoc("aadhar")} />
         </div>
 
         {/* Income Certificate (Optional) */}
@@ -92,7 +96,7 @@ export function DocumentsStep({ editMode, existingDocuments = [] }: DocumentsSte
               Optional
             </span>
           </div>
-          <ExistingDocBadge doc={getExistingDoc("income_certificate")} />
+          <ExistingDocBadge kind="spotlight" doc={getExistingDoc("income_certificate")} />
         </div>
       </div>
 
@@ -129,17 +133,6 @@ export function DocumentsStep({ editMode, existingDocuments = [] }: DocumentsSte
   )
 }
 
-function ExistingDocBadge({ doc }: { doc?: { document_type: string; file_name: string } }) {
-  if (!doc) return null
-  return (
-    <div className="flex items-center gap-1.5 mt-1.5 px-2 py-1 bg-green-50 border border-green-200 rounded-md">
-      <CheckCircle2 className="w-3.5 h-3.5 text-green-600 flex-shrink-0" />
-      <span className="text-xs text-green-700 truncate">
-        Uploaded: {doc.file_name}
-      </span>
-    </div>
-  )
-}
 
 function CheckItem({
   label,

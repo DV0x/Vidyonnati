@@ -45,7 +45,13 @@ import {
   Award,
   IndianRupee,
   AlertTriangle,
+  Download,
+  Loader2,
 } from 'lucide-react'
+import {
+  useDocumentDownload,
+  useDocumentObjectUrl,
+} from '@/hooks/use-document-download'
 
 type SpotlightReview = NonNullable<
   FunctionReturnType<typeof api.admin.spotlightApplication>
@@ -280,9 +286,7 @@ export default function SpotlightReviewContent({
         transition={{ duration: 0.3, delay: 0.2 }}
         className="grid gap-6 lg:grid-cols-3"
       >
-        {/* Profile photo intentionally not rendered. The Supabase table had a
-            photo_url column; in Convex the photo is a row in spotlightDocuments
-            and needs a storage URL, which is Phase 4. */}
+        <ProfilePhoto documents={documents} name={application.fullName} />
 
 
         {/* Personal Information */}
@@ -557,24 +561,99 @@ function InfoRow({
   )
 }
 
-function DocumentRow({ document }: { document: SpotlightDocumentRow }) {
+// Replaces the Supabase table's photo_url column, which has no Convex
+// equivalent — the photo is a row in spotlightDocuments like any other file.
+//
+// Fetched through the authorized route even though a FEATURED spotlight photo is
+// public (featured.ts and the /admin/spotlight list both mint plain storage URLs
+// for those). An application being reviewed here has usually not been featured
+// yet, so its photo has never been published.
+function ProfilePhoto({
+  documents,
+  name,
+}: {
+  documents: SpotlightDocumentRow[]
+  name: string
+}) {
+  const photo = documents.find((doc) => doc.documentType === 'photo')
+  const { url, error } = useDocumentObjectUrl('spotlight', photo?._id ?? null)
+
+  if (!photo) return null
+
   return (
-    <div className="flex items-center justify-between rounded-lg border p-3">
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-lg">
+          <User className="h-5 w-5 text-primary" />
+          Profile Photo
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="relative aspect-[3/4] w-full overflow-hidden rounded-lg border bg-gray-100">
+          {url ? (
+            // unoptimized because a blob: URL cannot be proxied by the image
+            // optimizer — and needs no proxying, the bytes are already here.
+            <Image
+              src={url}
+              alt={`Photo of ${name}`}
+              fill
+              unoptimized
+              className="object-cover"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center">
+              {error ? (
+                <AlertTriangle className="h-6 w-6 text-gray-400" />
+              ) : (
+                <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+              )}
+            </div>
+          )}
+        </div>
+        {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
+      </CardContent>
+    </Card>
+  )
+}
+
+function DocumentRow({ document: doc }: { document: SpotlightDocumentRow }) {
+  const { download, pendingId } = useDocumentDownload()
+  const isPending = pendingId === doc._id
+
+  return (
+    <div className="flex items-center justify-between rounded-lg border p-3 gap-3">
       <div className="flex items-center gap-3 min-w-0">
         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-100">
           <FileText className="h-5 w-5 text-gray-600" />
         </div>
         <div className="min-w-0">
           <p className="text-sm font-medium text-gray-900 truncate">
-            {documentTypeLabels[document.documentType] || document.documentType}
+            {documentTypeLabels[doc.documentType] || doc.documentType}
           </p>
-          <p className="text-xs text-gray-500 truncate">{document.fileName}</p>
+          <p className="text-xs text-gray-500 truncate">{doc.fileName}</p>
         </div>
       </div>
-      {/* No download link until Phase 4; see the scholarship review page. */}
-      <span className="text-xs text-gray-400 shrink-0">
-        {Math.round(document.fileSize / 1024)} KB
-      </span>
+      <div className="flex items-center gap-3 shrink-0">
+        <span className="text-xs text-gray-400">
+          {Math.round(doc.fileSize / 1024)} KB
+        </span>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={isPending}
+          onClick={async () => {
+            const failure = await download('spotlight', doc._id, doc.fileName)
+            if (failure) toast.error(failure)
+          }}
+        >
+          {isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Download className="h-4 w-4" />
+          )}
+          Download
+        </Button>
+      </div>
     </div>
   )
 }

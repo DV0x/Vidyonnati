@@ -4,12 +4,16 @@ import { useFormContext } from "react-hook-form"
 import { FileUpload } from "@/app/components/FileUpload"
 import { AnimatedTextarea } from "@/app/components/AnimatedTextarea"
 import { type ApplicationType } from "@/lib/schemas/application"
-import { Check, FileText, Leaf, PenLine, CheckCircle2 } from "lucide-react"
+import { Check, FileText, Leaf, PenLine } from "lucide-react"
+import {
+  ExistingDocBadge,
+  type ExistingDocument,
+} from "@/app/components/ExistingDocuments"
 
 interface DocumentsStepProps {
   applicationType: ApplicationType
   editMode?: boolean
-  existingDocuments?: { document_type: string; file_name: string }[]
+  existingDocuments?: ExistingDocument[]
 }
 
 export function DocumentsStep({ applicationType, editMode, existingDocuments = [] }: DocumentsStepProps) {
@@ -113,7 +117,7 @@ export function DocumentsStep({ applicationType, editMode, existingDocuments = [
                 error={errors.sscMarksheet?.message as string}
                 description="10th class marks memo"
               />
-              <ExistingDocBadge doc={getExistingDoc("ssc_marksheet")} />
+              <ExistingDocBadge kind="application" doc={getExistingDoc("ssc_marksheet")} />
             </div>
 
             {/* Aadhar - Student */}
@@ -128,7 +132,7 @@ export function DocumentsStep({ applicationType, editMode, existingDocuments = [
                 error={errors.aadharStudent?.message as string}
                 description="Student's Aadhar copy"
               />
-              <ExistingDocBadge doc={getExistingDoc("aadhar_student")} />
+              <ExistingDocBadge kind="application" doc={getExistingDoc("aadhar_student")} />
             </div>
 
             {/* Aadhar - Parent */}
@@ -143,7 +147,7 @@ export function DocumentsStep({ applicationType, editMode, existingDocuments = [
                 error={errors.aadharParent?.message as string}
                 description="Parent's or guardian's Aadhar"
               />
-              <ExistingDocBadge doc={getExistingDoc("aadhar_parent")} />
+              <ExistingDocBadge kind="application" doc={getExistingDoc("aadhar_parent")} />
             </div>
 
             {/* Bonafide Certificate */}
@@ -158,7 +162,7 @@ export function DocumentsStep({ applicationType, editMode, existingDocuments = [
                 error={errors.bonafideCertificate?.message as string}
                 description="Study certificate from college"
               />
-              <ExistingDocBadge doc={getExistingDoc("bonafide_certificate")} />
+              <ExistingDocBadge kind="application" doc={getExistingDoc("bonafide_certificate")} />
             </div>
 
             {/* Bank Passbook */}
@@ -173,7 +177,7 @@ export function DocumentsStep({ applicationType, editMode, existingDocuments = [
                 error={errors.bankPassbook?.message as string}
                 description="Page showing account details"
               />
-              <ExistingDocBadge doc={getExistingDoc("bank_passbook")} />
+              <ExistingDocBadge kind="application" doc={getExistingDoc("bank_passbook")} />
             </div>
           </>
         )}
@@ -193,7 +197,7 @@ export function DocumentsStep({ applicationType, editMode, existingDocuments = [
                 error={errors.aadharStudent?.message as string}
                 description="Student's Aadhar copy"
               />
-              <ExistingDocBadge doc={getExistingDoc("aadhar_student")} />
+              <ExistingDocBadge kind="application" doc={getExistingDoc("aadhar_student")} />
             </div>
 
             {/* Aadhar - Parent */}
@@ -208,7 +212,7 @@ export function DocumentsStep({ applicationType, editMode, existingDocuments = [
                 error={errors.aadharParent?.message as string}
                 description="Parent's or guardian's Aadhar"
               />
-              <ExistingDocBadge doc={getExistingDoc("aadhar_parent")} />
+              <ExistingDocBadge kind="application" doc={getExistingDoc("aadhar_parent")} />
             </div>
 
             {/* Bank Passbook */}
@@ -223,7 +227,7 @@ export function DocumentsStep({ applicationType, editMode, existingDocuments = [
                 error={errors.bankPassbook?.message as string}
                 description="Page showing account details"
               />
-              <ExistingDocBadge doc={getExistingDoc("bank_passbook")} />
+              <ExistingDocBadge kind="application" doc={getExistingDoc("bank_passbook")} />
             </div>
 
             {/* Bonafide Certificate */}
@@ -238,7 +242,7 @@ export function DocumentsStep({ applicationType, editMode, existingDocuments = [
                 error={errors.bonafideCertificate?.message as string}
                 description="Current year study certificate"
               />
-              <ExistingDocBadge doc={getExistingDoc("bonafide_certificate")} />
+              <ExistingDocBadge kind="application" doc={getExistingDoc("bonafide_certificate")} />
             </div>
 
             {/* 1st Year Marksheet */}
@@ -253,7 +257,7 @@ export function DocumentsStep({ applicationType, editMode, existingDocuments = [
                 error={errors.firstYearMarksheet?.message as string}
                 description="Previous year marks memo"
               />
-              <ExistingDocBadge doc={getExistingDoc("first_year_marksheet")} />
+              <ExistingDocBadge kind="application" doc={getExistingDoc("first_year_marksheet")} />
             </div>
 
             {/* Mango Plant Photo (Optional) */}
@@ -276,7 +280,7 @@ export function DocumentsStep({ applicationType, editMode, existingDocuments = [
                   </span>
                 </div>
               </div>
-              <ExistingDocBadge doc={getExistingDoc("mango_plant_photo")} />
+              <ExistingDocBadge kind="application" doc={getExistingDoc("mango_plant_photo")} />
             </div>
           </>
         )}
@@ -312,17 +316,6 @@ export function DocumentsStep({ applicationType, editMode, existingDocuments = [
   )
 }
 
-function ExistingDocBadge({ doc }: { doc?: { document_type: string; file_name: string } }) {
-  if (!doc) return null
-  return (
-    <div className="flex items-center gap-1.5 mt-1.5 px-2 py-1 bg-green-50 border border-green-200 rounded-md">
-      <CheckCircle2 className="w-3.5 h-3.5 text-green-600 flex-shrink-0" />
-      <span className="text-xs text-green-700 truncate">
-        Uploaded: {doc.file_name}
-      </span>
-    </div>
-  )
-}
 
 function CheckItem({ label, checked, optional }: { label: string; checked: boolean; optional?: boolean }) {
   return (
