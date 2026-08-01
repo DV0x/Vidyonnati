@@ -14,7 +14,13 @@ three passages that still described the serving decision as open.
 
 **As of:** 2026-08-01, end of session 4
 **Phases done:** 0 (setup), 0.5 (hardening), 1 (schema + auth), 2a + 2b, 3, **4**
-**Branch:** `convex-migration`, 6 commits ahead of `main` + uncommitted Phase 4
+**Branch:** `convex-migration` — **every phase committed, working tree clean,
+nothing merged to `main`**
+
+(Deliberately not a commit count. Session 3 found a stale one here, session 4
+wrote another that its own doc commit invalidated a second later. The commit
+table under Housekeeping is the authority; `git log main..convex-migration` is
+the answer.)
 
 Every read *and* every write is on Convex, and **Supabase has been deleted from
 the codebase** — all 22 API routes, both client wrappers, the generated row
@@ -37,9 +43,9 @@ below. It predates the migration entirely.
 ### The one thing with a clock on it
 
 **Google deletes OAuth client `391398186976-…` on 2026-08-15 if it goes unused,
-and only a *production* sign-in counts.** That is roughly two weeks out from the
-end of session 3. Losing the client means losing the verified consent screen and
-re-doing Google verification.
+and only a *production* sign-in counts.** That is **14 days** from the end of
+session 4 (2026-08-01). Losing the client means losing the verified consent
+screen and re-doing Google verification.
 
 Dev Google runs on Clerk's **shared** credentials, so no amount of local testing
 keeps the client alive. Nothing done so far has exercised it.
@@ -63,21 +69,29 @@ been verified — check it before assuming the full cutover is the only path.
 
 ### Recommended order
 
-Decided in session 4: **Google is handled last, by shipping to production** —
-step 6 below is a production Google sign-in, so the deadline is discharged as a
-side effect of the cutover rather than as separate work. That leaves ~2 weeks for
-steps 1–3, which is workable but has no slack.
+Decided in session 4 by the user: **Google is handled last, by shipping to
+production.** Step 6 of the chain above *is* a production Google sign-in, so the
+deadline is discharged as a side effect of the cutover rather than as separate
+work. That leaves 14 days for everything below — workable, with no slack.
 
-1. ~~Phase 4 — private document serving.~~ **Done in session 4.**
-2. **Rate limiting** on the two public mutations (below). Its own component
-   install and its own deploy.
-3. **Merge to `main`.** Six phase commits plus Phase 4 are sitting on
-   `convex-migration`.
-4. **Production cutover** — the six-step chain above. Note it now needs two more
-   Convex/Vercel settings that did not exist before Phase 4:
-   `NEXT_PUBLIC_CONVEX_SITE_URL` (Vercel) and `ALLOWED_WEB_ORIGINS`
-   (Convex env var on the prod deployment). Both are listed in the env map below.
-5. **Google sign-in on production**, which clears the 2026-08-15 deadline.
+**Start at 1.** Phases 0 through 4 are done and committed.
+
+1. **Rate limiting** on `donations.create` / `helpInterests.create` (see Open
+   decisions). `@convex-dev/rate-limiter`, keyed on the submitted email. Its own
+   component install and its own deploy, which is why it was never folded into
+   another phase.
+2. **Merge `convex-migration` → `main`.** Every phase is its own commit, so any
+   of them is a rollback point.
+3. **Production cutover** — the six-step chain above. It needs two settings that
+   did not exist before Phase 4: `NEXT_PUBLIC_CONVEX_SITE_URL` (Vercel) and
+   `ALLOWED_WEB_ORIGINS` (a Convex env var on the **prod** deployment). Both are
+   in the env map below.
+4. **Google sign-in on production**, which clears the 2026-08-15 deadline.
+
+Steps 3 and 4 need a human: the Clerk `pk_live`/`sk_live` come from the
+production Clerk dashboard, the Vercel project is **not linked locally** (no
+`.vercel/`, and the local CLI is outdated), and only a real browser sign-in
+exercises the Google client.
 
 ### Before touching anything
 
@@ -91,6 +105,13 @@ Session 3 is the same story: two bugs that reading could not have caught, both
 found by running the thing. A `storage.delete()` that silently rolled back, and
 a schema validator that would have rejected every card-originated help-interest
 submission. Written up under Phase 3 below.
+
+Session 4 is the sharpest example yet, and the lesson is narrower than "verify":
+**check that a thing is connected before reasoning about what it does.** Both
+wizards had complete zod schemas and step-field maps and no resolver, so nothing
+was validated at all — and the first two diagnoses of that were wrong because
+they came from reading the schemas rather than running the form. The user caught
+both. Details under "Wizard validation" below.
 
 ---
 
@@ -852,8 +873,8 @@ unaffected.
 
 ## Housekeeping
 
-- **The migration is committed.** Branch `convex-migration`, 10 commits ahead of
-  `main`:
+- **The migration is committed.** Branch `convex-migration`, nothing merged to
+  `main`. Every phase is its own commit, so any of them is a rollback point:
 
   | Commit | Covers |
   |---|---|
@@ -863,10 +884,14 @@ unaffected.
   | `98c845b` | Phase 2b part 2 — admin pages |
   | `0f8b15d` | Phase 3 — write paths + removal of the Supabase surface |
   | `d218cf9` | Docs — handoff rename + next-session plan |
-  | *(session 4)* | Phase 4 — authorized private document serving |
-  | *(session 4)* | next/image host allowlist + sonner Toaster mount |
-  | *(session 4)* | Wizard validation, edit-mode file exemption, StatementStep removal |
-  | *(session 4)* | Docs — this file + CLAUDE.md |
+  | `b5e1377` | Phase 4 — authorized private document serving |
+  | `cd67cc0` | next/image host allowlist + sonner Toaster mount |
+  | `9a41730` | Wizard validation, edit-mode file exemption, StatementStep removal |
+  | `0ba233d` | Docs — this file + CLAUDE.md |
+
+  The two session-4 bug fixes are deliberately separate from the Phase 4 work,
+  so `cd67cc0` can be cherry-picked onto `main` ahead of the migration if the
+  broken image host or the silent toasts ever need fixing sooner.
 
   Each phase is its own commit, so any of them is a rollback point. Nothing has
   been merged to `main` yet.
