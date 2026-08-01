@@ -3,6 +3,7 @@ import { mutation } from "./_generated/server"
 import { bumpCounter, counterKeys } from "./lib/counters"
 import { donationSearchText } from "./lib/search"
 import { generateDonationId } from "./lib/ids"
+import { enforceIntakeRateLimit } from "./lib/rateLimits"
 
 // Public donation intake — the wire-transfer pledge form on /donate.
 //
@@ -13,16 +14,16 @@ import { generateDonationId } from "./lib/ids"
 // The Supabase version had exactly the same exposure — it used the service-role
 // key from a route with no auth check — so this is a port, not a new hole.
 //
-// What it means in practice: a script can insert donation rows at will. Nothing
-// here moves money (payment is an offline wire transfer that an admin confirms
-// by hand), so the damage is junk rows in the admin queue and an inflated
-// pending counter, not financial loss.
+// Rate limiting is what bounds it: @convex-dev/rate-limiter, per submitted email
+// with a global backstop. See convex/lib/rateLimits.ts for the limits, how they
+// were sized, and the one behaviour that surprises people testing them — the
+// validation below runs BEFORE the limiter, so a malformed submission never
+// reaches it and costs no quota.
 //
-// The real fix is @convex-dev/rate-limiter keyed on donorEmail — the Convex
-// guidelines call for it over hand-rolled window counters, which lose quota
-// under concurrency. It is deliberately NOT installed here: adding a component
-// mid-migration is its own change with its own deploy, and doing it silently
-// inside a port would bury it. Tracked in the handoff's open decisions.
+// What remains unbounded even so: nothing here moves money — payment is an
+// offline wire transfer an admin confirms by hand — so the worst case is junk
+// rows in the admin queue and an inflated pending counter, now capped at a rate
+// slow enough for a human to notice.
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Same shape the API route used. Deliberately permissive — it rejects obvious
@@ -55,9 +56,15 @@ export const create = mutation({
       throw new ConvexError("Amount must be greater than 0")
     }
 
-    const donationId = await generateDonationId(ctx)
     const donorName = args.donorName.trim()
     const donorEmail = args.donorEmail.trim()
+
+    // After validation, so the bucket is keyed on an address that passed the
+    // format check and was trimmed — otherwise " a@b.c" and "a@b.c" would be
+    // two allowances for one donor.
+    await enforceIntakeRateLimit(ctx, "donation", donorEmail)
+
+    const donationId = await generateDonationId(ctx)
 
     const id = await ctx.db.insert("donations", {
       donationId,

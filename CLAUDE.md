@@ -80,6 +80,18 @@ bug listed below.
   and cannot be withdrawn short of deleting the object. Private files go through
   the authorized route in `convex/http.ts`; `getUrl()` is only for spotlight
   photos that are published on the homepage anyway.
+- **A rate limit that validation runs ahead of cannot be tripped by bad input.**
+  Both public mutations validate before calling `enforceIntakeRateLimit`, so a
+  malformed payload throws and never reaches the limiter — test with input that
+  would actually succeed or you will conclude it is not wired. Separately, a
+  component's writes join the caller's transaction, so anything throwing *after*
+  consumption returns the token. Two different mechanisms; keep them apart when
+  reasoning about why a token was or was not spent.
+- **`maintenance:recomputeCounters` requires an admin identity**, so running it
+  through `npx convex run --identity` rebinds the seeded
+  `hello@vidyonnatifoundation.org` admin row to whatever throwaway identity the
+  flag supplies (`requireAdminForWrite` binds on first authenticated write). It
+  self-heals on a real sign-in, but reach for the repair job deliberately.
 - **A schema existing does not mean it is wired.** Both wizards had complete zod
   schemas and step-field maps and **no resolver**, so nothing was ever validated
   — for the entire life of the project, until session 4. Before reasoning about

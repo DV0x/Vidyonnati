@@ -19,6 +19,7 @@ import type * as http from "../http.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_counters from "../lib/counters.js";
 import type * as lib_ids from "../lib/ids.js";
+import type * as lib_rateLimits from "../lib/rateLimits.js";
 import type * as lib_search from "../lib/search.js";
 import type * as lib_studentData from "../lib/studentData.js";
 import type * as maintenance from "../maintenance.js";
@@ -43,6 +44,7 @@ declare const fullApi: ApiFromModules<{
   "lib/auth": typeof lib_auth;
   "lib/counters": typeof lib_counters;
   "lib/ids": typeof lib_ids;
+  "lib/rateLimits": typeof lib_rateLimits;
   "lib/search": typeof lib_search;
   "lib/studentData": typeof lib_studentData;
   maintenance: typeof maintenance;
@@ -76,4 +78,6 @@ export declare const internal: FilterApi<
   FunctionReference<any, "internal">
 >;
 
-export declare const components: {};
+export declare const components: {
+  rateLimiter: import("@convex-dev/rate-limiter/_generated/component.js").ComponentApi<"rateLimiter">;
+};

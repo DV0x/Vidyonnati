@@ -2,13 +2,14 @@ import { v, ConvexError } from "convex/values"
 import { mutation } from "./_generated/server"
 import { bumpCounter, counterKeys } from "./lib/counters"
 import { helpInterestSearchText } from "./lib/search"
+import { enforceIntakeRateLimit } from "./lib/rateLimits"
 
 // Public "I want to help" intake — the dialog on a featured student's card and
 // the standalone contact form.
 //
-// Unauthenticated for the same reason as donations.create, with the same
-// exposure and the same open rate-limiting decision. See the block comment
-// there; it is not repeated here.
+// Unauthenticated for the same reason as donations.create, and bounded the same
+// way: per-email rate limiting with a global backstop. See the block comment
+// there and convex/lib/rateLimits.ts; neither is repeated here.
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -44,6 +45,10 @@ export const create = mutation({
     const name = args.name.trim()
     const email = args.email.trim()
     const studentName = args.studentName || undefined
+
+    // Same placement as donations.create: after validation so the key is the
+    // trimmed, format-checked address, before the insert.
+    await enforceIntakeRateLimit(ctx, "helpInterest", email)
 
     const id = await ctx.db.insert("helpInterests", {
       name,

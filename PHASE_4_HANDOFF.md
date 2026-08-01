@@ -12,10 +12,15 @@ of the work, not after it**, and never fork a second copy that can disagree with
 it. Session 4 renamed it and rewrote every section Phase 4 falsified, including
 three passages that still described the serving decision as open.
 
-**As of:** 2026-08-01, end of session 4
+**As of:** 2026-08-01, end of session 5
 **Phases done:** 0 (setup), 0.5 (hardening), 1 (schema + auth), 2a + 2b, 3, **4**
 **Branch:** `convex-migration` — **every phase committed, working tree clean,
 nothing merged to `main`**
+
+The filename still says `PHASE_4` on purpose. Session 5 did not land a phase —
+it cleared **rate limiting**, which was the first item on the open-decisions
+list and step 1 of the sequenced plan below. Renaming to `PHASE_5` would invent
+a phase that does not exist in `CONVEX_MIGRATION_PLAN.md`.
 
 (Deliberately not a commit count. Session 3 found a stale one here, session 4
 wrote another that its own doc commit invalidated a second later. The commit
@@ -35,6 +40,12 @@ Session 4 also found, while testing that, that **neither application wizard had
 any client-side validation at all** — a student could walk from step 0 to Review
 with an empty form and submit it. That is now fixed and has its own section
 below. It predates the migration entirely.
+
+Session 5 installed **`@convex-dev/rate-limiter`** on the two public
+unauthenticated mutations. That was the last item standing between the branch
+and a merge, and it is the project's **first Convex component** — so
+`convex/convex.config.ts` now exists, which it never did before. Details in its
+own section below.
 
 ---
 
@@ -74,18 +85,21 @@ production.** Step 6 of the chain above *is* a production Google sign-in, so the
 deadline is discharged as a side effect of the cutover rather than as separate
 work. That leaves 14 days for everything below — workable, with no slack.
 
-**Start at 1.** Phases 0 through 4 are done and committed.
+**Start at 2.** Phases 0 through 4 are done and committed, and session 5
+cleared step 1.
 
-1. **Rate limiting** on `donations.create` / `helpInterests.create` (see Open
-   decisions). `@convex-dev/rate-limiter`, keyed on the submitted email. Its own
-   component install and its own deploy, which is why it was never folded into
-   another phase.
+1. ~~**Rate limiting** on `donations.create` / `helpInterests.create`.~~
+   **Done in session 5** — `@convex-dev/rate-limiter`, per submitted email with
+   a global backstop, verified against the dev deployment. See the rate-limiting
+   section below for the limits and the numbers most likely to need tuning.
 2. **Merge `convex-migration` → `main`.** Every phase is its own commit, so any
-   of them is a rollback point.
+   of them is a rollback point. Nothing blocks this now.
 3. **Production cutover** — the six-step chain above. It needs two settings that
    did not exist before Phase 4: `NEXT_PUBLIC_CONVEX_SITE_URL` (Vercel) and
    `ALLOWED_WEB_ORIGINS` (a Convex env var on the **prod** deployment). Both are
-   in the env map below.
+   in the env map below. The rate limiter needs **no** configuration there — a
+   component's tables are created by the deploy — but its first prod deploy is
+   also the first time `convex.config.ts` is pushed to that deployment.
 4. **Google sign-in on production**, which clears the 2026-08-15 deadline.
 
 Steps 3 and 4 need a human: the Clerk `pk_live`/`sk_live` come from the
@@ -229,7 +243,8 @@ Two things to know before signing in as the admin:
 
 Nothing known. `tsc --noEmit` 0 errors · `eslint .` 0 errors, **53 warnings**
 (down from 56 after Phase 4) · `npm run build` succeeds — no `/api` routes, down
-from 46 pages pre-migration.
+from 46 pages pre-migration. Session 5's rate limiting added **no** warnings and
+no errors; those three numbers are unchanged from the end of session 4.
 
 Session 4 also fixed three defects that predate it. The wizard validation gap has
 its own section below; the other two were found while wiring photo rendering and
@@ -296,6 +311,13 @@ lib/supabase/server.ts · lib/supabase/admin.ts
 types/database.ts     the generated Postgres row types
 ```
 plus the `@supabase/ssr` and `@supabase/supabase-js` packages.
+
+**Added in session 5**
+```
+convex/convex.config.ts       component mounts — the project's first
+convex/lib/rateLimits.ts      four limits + enforceIntakeRateLimit
+```
+plus the `@convex-dev/rate-limiter` package.
 
 This was not only tidying. `/api/donations` and `/api/help-interest` were
 **unauthenticated routes holding the service-role key** — unreachable from the
@@ -842,19 +864,117 @@ Convex table; what survived that restructure became the second-year essays on
 the Documents step. The spotlight equivalent, `StoryGoalsStep`, is live and
 unaffected.
 
+## Rate limiting — the two public mutations (session 5)
+
+The last open item before the branch could merge. `donations.create` and
+`helpInterests.create` take no identity by design — donors and enquirers are
+never asked for an account — so before this, anyone could insert rows at will.
+Not a regression (the Supabase routes had the same exposure via the
+service-role key) but the migration was the moment to close it.
+
+### The project's first Convex component
+
+`convex/convex.config.ts` **did not exist** before this. Creating it and running
+codegen is what makes the generated `components` object appear in
+`convex/_generated/api` — without both, `components.rateLimiter` is a type
+error. Worth knowing before mounting the second component: nothing about the
+first one is special, but the file it needs is easy to look for and not find.
+
+| File | What |
+|---|---|
+| `convex/convex.config.ts` (new) | mounts `@convex-dev/rate-limiter` |
+| `convex/lib/rateLimits.ts` (new) | the four limits + `enforceIntakeRateLimit` |
+| `convex/donations.ts` · `convex/helpInterests.ts` | one call each, after validation |
+
+No client change was needed. Both forms already route their catch through
+`convexErrorMessage`, which reads `message` out of an object payload, so a
+`ConvexError({ code: "RATE_LIMITED", message, retryAfter })` surfaces as a toast
+on `/donate` and a root form error in `HelpInterestDialog` for free.
+
+### The limits, and which numbers to tune
+
+```
+donationByEmail     / helpInterestByEmail     token bucket, 5  per hour, capacity 5
+donationsGlobal     / helpInterestsGlobal     token bucket, 300 per hour, capacity 100
+```
+
+**Per-email** is the limit a real person can trip, and five an hour absorbs a
+double-click, a "did that go through?" retry and a genuine second donation.
+Token bucket rather than fixed window so the allowance refills smoothly — under
+a fixed window a donor who submitted at 10:59 gets nothing until the window
+rolls; here they wait twelve minutes for one token.
+
+**The global backstop exists because the per-email key is caller-supplied.**
+An attacker changes the email for free, so per-email alone bounds nothing:
+cycling addresses gets unlimited rows at five apiece.
+
+It also carries a real trade, stated in the file: **a global limit can be burned
+by an attacker, and while it is burned real donors are turned away** — a worse
+outcome than junk rows. So it is sized as an emergency ceiling rather than a
+traffic limiter. This foundation sees single-digit submissions a day; 100 in a
+burst is a number no honest week has produced. **These two numbers are the ones
+most likely to need tuning** if a campaign ever drives real bursts, and nothing
+else depends on them.
+
+Left unsharded deliberately. Sharding raises write throughput on a limit every
+submission touches, at the cost of making it approximate; at this volume the
+contention does not exist and the exactness is worth more.
+
+### The thing that will make it look broken
+
+Two separate mechanisms keep a malformed submission from costing quota, and only
+one of them is about the component:
+
+1. **Ordering.** Both handlers validate *before* calling the limiter, so a bad
+   email or a zero amount throws and never reaches it. Deliberate — a donor
+   should not burn their own allowance on a typo.
+2. **Rollback.** A component's writes join the calling mutation's transaction,
+   so anything that throws *after* the consumption returns the token with it.
+   That is what makes consume-then-insert atomic.
+
+The consequence of (1): **a script POSTing garbage can hammer these forever
+without ever being limited**, because nothing it sends is written either. Test
+with payloads that would actually succeed, or you will conclude the limiter is
+not wired. This was hit for real during verification — a test email padded with
+spaces failed the existing format regex (which tests the untrimmed string) and
+was rejected at `donations.ts:54`, before the limiter.
+
+### Verified against the live deployment
+
+Run, not inspected — every case through the real mutation:
+
+| Case | Result |
+|---|---|
+| 5 donations, one email | all accepted |
+| 6th, same email | `RATE_LIMITED`, `retryAfter` 703950ms → "about 12 minutes" |
+| rows + counter after the rejection | exactly 5 rows, counter 0 → 5 — the rejected call wrote nothing and bumped nothing |
+| `RateLimit-Test@Example.COM` after exhausting the lowercase form | blocked — the key is lowercased, so case alone does not buy a fresh allowance |
+| a genuinely different email | accepted |
+| same six-step sequence on `helpInterests.create` | identical |
+| global bucket drained, then a donation from a **fresh** email | blocked, and with the *global* message, not the per-email one |
+| ...and a help interest from a fresh email at the same moment | accepted — the two surfaces' globals are independent |
+| rows after the global rejection | zero |
+
+"About 12 minutes" is the token-bucket arithmetic checking out: 5 per hour is
+one token per 12 minutes.
+
+Test scaffolding (`convex/tmpRateLimitTest.ts`) was deleted and the deletion
+deployed; all 12 test rows were removed and both counters recounted back to
+their pre-test values (`donations:status:pending` 0, `helpInterests:status:new`
+1). The dev deployment contents table above is still accurate.
+
+One note from the cleanup worth keeping: **`maintenance:recomputeCounters`
+requires an admin identity**, and running it through `npx convex run --identity`
+would have rebound the seeded `hello@vidyonnatifoundation.org` admin row to a
+throwaway identity via `requireAdminForWrite`. The two affected counters were
+recounted directly instead. Not a bug — just a reason to reach for the repair
+job deliberately rather than reflexively.
+
 ## Open decisions / not yet done
 
-- **Rate limiting on the two public mutations.** `donations.create` and
-  `helpInterests.create` are unauthenticated by design — donors and enquirers
-  have no account — so anyone can call them. This is not a regression: the
-  Supabase routes had the identical exposure via the service-role key, and
-  nothing here moves money (payment is an offline wire transfer an admin
-  confirms by hand). The cost of abuse is junk rows in the queue and an inflated
-  pending counter. The fix is `@convex-dev/rate-limiter` keyed on the submitted
-  email — the Convex guidelines specifically call for the component over a
-  hand-rolled window counter, which loses quota under concurrency. Not installed
-  here because adding a component mid-migration is its own change with its own
-  deploy, and burying it inside a port would hide it.
+- ~~Rate limiting on the two public mutations.~~ **Done in session 5 — see the
+  rate-limiting section below.** Kept here as a pointer because three phases
+  deliberately deferred it and the reasoning for the sizing depends on why.
 - **Clerk `user.created` webhook → Convex HTTP action.** Not built. The lazy
   `getOrCreateStudent` safety net covers it, so this is an optimization.
 - ~~Private document serving.~~ **Decided and built in session 4 — see the
@@ -887,7 +1007,14 @@ unaffected.
   | `b5e1377` | Phase 4 — authorized private document serving |
   | `cd67cc0` | next/image host allowlist + sonner Toaster mount |
   | `9a41730` | Wizard validation, edit-mode file exemption, StatementStep removal |
-  | `0ba233d` | Docs — this file + CLAUDE.md |
+  | `0ba233d` | Docs — handoff + CLAUDE.md for Phase 4 |
+  | `cc8f953` | Docs — session 5 pickup section |
+
+  Session 5 appends its own rate-limiting commit below that; `git log
+  main..convex-migration` is always the authority, and this table has now been
+  caught trailing HEAD twice (session 5 opened by finding `cc8f953` missing from
+  it, exactly the failure the header warns about). **Update it in the same
+  commit as the work.**
 
   The two session-4 bug fixes are deliberately separate from the Phase 4 work,
   so `cd67cc0` can be cherry-picked onto `main` ahead of the migration if the
