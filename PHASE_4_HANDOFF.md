@@ -209,6 +209,36 @@ directly against `amicable-narwhal-186.convex.site`:
 | `OPTIONS` preflight from `https://vidyonnatifoundation.org` | **204** + `access-control-allow-origin` for that origin |
 | `OPTIONS` from an unlisted origin | **403** — fails closed, as designed |
 
+### Test data cleared
+
+Wiped on 2026-08-01 via a temporary `internalMutation`, since nothing in the
+codebase deletes these rows (deliberately). Removed: 1 application, 6
+application documents **and their 6 storage objects**, 1 donation, 1 activity-log
+entry, 1 students row, 4 counter rows. `admins` was excluded and survives, still
+bound.
+
+**The storage objects were deleted in the same mutation rather than left to
+`maintenance.sweepOrphanedFiles`**, which spares anything younger than 24h and
+so would not have collected them for another day. Deleting only the document
+rows would have left Aadhaar cards and bank passbooks in production storage —
+unreferenced, and invisible to every query that could find them again. Safe
+because each `storageId` was read out of our own row, never client-supplied:
+the same distinction `convex/documents.ts` draws about why the attach path must
+never delete a client's `storageId`. Verified afterwards by counting `_storage`
+directly: **0 files remaining**.
+
+Counter rows were deleted outright rather than zeroed — `readCounter` returns
+`row?.value ?? 0`, so an absent row already reads as zero, exactly as on a fresh
+deployment.
+
+⚠️ **A `students` row reappeared within seconds, and that is correct.** A live
+browser session for `agency5027@gmail.com` was still open, so `AuthContext`'s
+`ensureStudentProfile` recreated the profile — new `_id`, later `_creationTime`.
+You cannot delete a student row out from under an open session; that safety net
+is what makes the missing-row failure structurally unreachable. Harmless (an
+empty profile, no application). To remove it for good, sign that account out
+everywhere first.
+
 ### Step 3: the prod admin row — seeded, and deliberately unbound
 
 **Nothing in the codebase inserts into `admins`** — dev's row was created by
