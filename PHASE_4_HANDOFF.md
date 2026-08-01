@@ -124,18 +124,37 @@ throughout and recorded no errors.
 does not match the seeded `hello@vidyonnatifoundation.org`, so `requireAdmin`
 throws `Forbidden`. That is the authorization behaving correctly.
 
-**Still to do:** sign in once as `hello@vidyonnatifoundation.org` to bind the
-`admins` row. Decided in session 5 to keep that as the admin address rather than
-repoint the row.
-
-⚠️ **Expect to use an email code, not the Google button, for that sign-in.**
-The domain's mail is on **Zoho**, not Google Workspace, so
-`hello@vidyonnatifoundation.org` is very unlikely to be a Google account. The
-binding does not care which method is used — `requireAdminForWrite` binds on the
-first authenticated *write* regardless of how the session was created.
-
 The `agency5027@gmail.com` `students` row is harmless and can stay; any signed-in
-person gets one from the lazy `getOrCreateStudent`.
+non-admin gets one from the lazy `getOrCreateStudent`.
+
+### The admin sign-in — working, and the `admins` row is still unbound
+
+`hello@vidyonnatifoundation.org` signed up and verified on 2026-08-01
+(`user_3HJP0ql6IGcLrfVjYKQaSCbJfOt`). There was **no Clerk account before that** —
+confirmed against the Backend API, which returned 0 users for the address. Worth
+knowing because it is the answer to "what is the admin password?": there is none
+and never was. The `admins` row carries `email`/`name`/`role` only. It is an
+**authorization** record; authentication is entirely Clerk's, and access is
+gated on control of the mailbox, exactly as the `lookupAdmin` comment intends.
+
+**The row is still unbound, and that is correct.** Two things caused confusion
+here, both worth recording:
+
+1. **Binding needs a *write*.** `requireAdminForWrite` binds `clerkUserId` and
+   `tokenIdentifier`; `requireAdmin` (every read path) does not. Browsing
+   `/admin` therefore binds nothing. Production has no applications, donations
+   or spotlight rows yet, so **there is no admin write available to perform** —
+   the row will stay unbound until real data exists to act on. Harmless:
+   `lookupAdmin` falls through to the email match indefinitely, so admin works
+   fully either way. Binding is an optimization, not a requirement.
+
+2. **No `students` row was created for the admin, and that absence is the
+   proof it worked.** `app/context/AuthContext.tsx:69` short-circuits on
+   `if (me.isAdmin || me.student) return`, so `ensureStudentProfile` never runs
+   for an admin. `users.me` calls `lookupAdmin` first and returns
+   `isAdmin: true` on an email match. Since no student row appeared and none
+   existed to match, `me.isAdmin` must have been true. Do not read a missing
+   students row as a failed admin sign-in — it is the opposite.
 
 ### Step 3: the prod admin row — seeded, and deliberately unbound
 
