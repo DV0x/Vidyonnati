@@ -113,6 +113,11 @@ bug listed below.
   sequenced next steps. Renamed each time a phase lands (`PHASE_2` → `PHASE_3` →
   `PHASE_4`, as of session 4); there is deliberately only ever one of these,
   updated in place, so it cannot go stale against a second copy.
+- `SESSION_LOG.md` — **history, not state.** Append-only, one entry per session:
+  what shipped, what was decided, what was learned the hard way. Starts at
+  session 5. Never look up current configuration there — that is the handoff's
+  job. The two are complementary precisely because only one of them describes
+  the present; two documents claiming to is the failure mode above.
 - `CONVEX_MIGRATION_PLAN.md` — architecture, schema, phase plan, risks
 - `ARCHITECTURE.md` — pre-migration reference (still accurate for UI/routing;
   its Supabase sections are historical)
