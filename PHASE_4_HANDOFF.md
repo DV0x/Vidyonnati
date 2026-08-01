@@ -51,15 +51,28 @@ own section below.
 
 ## Next session: start here
 
-### The one thing with a clock on it
+### ~~The one thing with a clock on it~~ — CLEARED
 
-**Google deletes OAuth client `391398186976-…` on 2026-08-15 if it goes unused,
-and only a *production* sign-in counts.** That is **14 days** from the end of
-session 4 (2026-08-01). Losing the client means losing the verified consent
-screen and re-doing Google verification.
+**The 2026-08-15 Google OAuth deadline is discharged.** On 2026-08-01 a real
+Google sign-in completed on production (`vidyonnatifoundation.org`), which
+exercises client `391398186976-…` through the custom production credentials.
+The verified consent screen is safe; no re-verification needed.
 
-Dev Google runs on Clerk's **shared** credentials, so no amount of local testing
-keeps the client alive. Nothing done so far has exercised it.
+Kept below for the record, because the reasoning explains why dev testing never
+counted and would apply again if the client ever goes idle for another year.
+
+<details>
+<summary>Original deadline note</summary>
+
+Google deletes OAuth client `391398186976-…` on 2026-08-15 if it goes unused,
+and only a *production* sign-in counts. Dev Google runs on Clerk's **shared**
+credentials, so no amount of local testing keeps the client alive.
+
+</details>
+
+Now safe to do, and worth doing: **delete the leftover Supabase redirect URI**
+from that Google client. It was kept deliberately until production Clerk sign-in
+was proven. It now is.
 
 The chain standing between here and a production Google sign-in:
 
@@ -70,7 +83,7 @@ The chain standing between here and a production Google sign-in:
 | 3 | Seed the `hello@vidyonnatifoundation.org` admin row there (prod starts empty) | ✅ seeded, **unbound** — see below |
 | 4 | Set Vercel env vars | ✅ **all 5 set** (Production scope), build command in `vercel.json` |
 | 5 | Deploy — **Convex functions before the frontend**, per CLAUDE.md | ✅ **live** — merged and deployed, see below |
-| 6 | Actually sign in with Google on production | ⬜ **the only step left** |
+| 6 | Actually sign in with Google on production | ✅ **done 2026-08-01 — deadline cleared** |
 
 ### Step 5 landed: the migration is in production
 
@@ -91,9 +104,38 @@ Checked against the live site, not inferred:
 | `/api/donations` | 404 — the Supabase routes are genuinely gone from production |
 | `/dashboard` | 307 → `/login?redirect=%2Fdashboard` |
 
-**Nobody has signed in on production yet.** The `admins` row is still unbound,
-and the Google OAuth client is still unexercised — step 6 discharges both at
-once.
+### The first production sign-in, and what it did and did not prove
+
+Signed in via **Google** on 2026-08-01 as `agency5027@gmail.com`. That wrote:
+
+```
+students: agency5027@gmail.com
+  tokenIdentifier: https://clerk.vidyonnatifoundation.org|user_3HJO7hftlghnEE6VBJd39RsPyof
+```
+
+The issuer in that `tokenIdentifier` is the **production** Clerk instance, which
+is the proof that matters: prod Clerk mints a token carrying `aud: "convex"`,
+Convex validates it against `CLERK_JWT_ISSUER_DOMAIN`, `getUserIdentity()`
+resolves, and `getOrCreateStudent` writes. `npx convex logs --prod` was tailing
+throughout and recorded no errors.
+
+**It did not grant admin, and could not have.** `lookupAdmin` tries
+`tokenIdentifier`, then `clerkUserId`, then email — and `agency5027@gmail.com`
+does not match the seeded `hello@vidyonnatifoundation.org`, so `requireAdmin`
+throws `Forbidden`. That is the authorization behaving correctly.
+
+**Still to do:** sign in once as `hello@vidyonnatifoundation.org` to bind the
+`admins` row. Decided in session 5 to keep that as the admin address rather than
+repoint the row.
+
+⚠️ **Expect to use an email code, not the Google button, for that sign-in.**
+The domain's mail is on **Zoho**, not Google Workspace, so
+`hello@vidyonnatifoundation.org` is very unlikely to be a Google account. The
+binding does not care which method is used — `requireAdminForWrite` binds on the
+first authenticated *write* regardless of how the session was created.
+
+The `agency5027@gmail.com` `students` row is harmless and can stay; any signed-in
+person gets one from the lazy `getOrCreateStudent`.
 
 ### Step 3: the prod admin row — seeded, and deliberately unbound
 
