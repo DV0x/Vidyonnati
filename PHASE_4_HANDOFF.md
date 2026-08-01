@@ -67,36 +67,37 @@ The chain standing between here and a production Google sign-in:
 |---|---|---|
 | 1 | Create the **production Convex deployment** | ✅ `amicable-narwhal-186` |
 | 2 | Set `CLERK_JWT_ISSUER_DOMAIN` on it to the **production** Clerk issuer (`clerk.vidyonnatifoundation.org`), not the dev one | ✅ set, plus `ALLOWED_WEB_ORIGINS` |
-| 3 | Seed the `hello@vidyonnatifoundation.org` admin row there (prod starts empty) | ❌ **still to do** — see below |
-| 4 | Set Vercel env vars: `pk_live`/`sk_live`, prod `NEXT_PUBLIC_CONVEX_URL`, prod `NEXT_PUBLIC_CONVEX_SITE_URL`, `CONVEX_DEPLOY_KEY` | ❌ none set |
+| 3 | Seed the `hello@vidyonnatifoundation.org` admin row there (prod starts empty) | ✅ seeded, **unbound** — see below |
+| 4 | Set Vercel env vars: `pk_live`/`sk_live`, prod `NEXT_PUBLIC_CONVEX_URL`, prod `NEXT_PUBLIC_CONVEX_SITE_URL`, `CONVEX_DEPLOY_KEY` | ❌ **none set — the only thing left** |
 | 5 | Deploy — **Convex functions before the frontend**, per CLAUDE.md | ⬜ Convex side ✅ done; frontend not deployed |
 | 6 | Actually sign in with Google on production | ⬜ |
 
-### Step 3: seeding the prod admin row
+### Step 3: the prod admin row — seeded, and deliberately unbound
 
-**Nothing in the codebase inserts into `admins`** — the dev row was created by
-hand. So this is a manual step, by design: an admin row is a privilege grant and
-there is deliberately no function that mints one.
+**Nothing in the codebase inserts into `admins`** — dev's row was created by
+hand, and so was this one. That is by design: an admin row is a privilege grant
+and there is deliberately no function that mints one. Recorded here because the
+absence of a seed script looks like an oversight until you know it is not.
 
-Do it from the Convex dashboard's data browser on `amicable-narwhal-186`, or:
+Seeded in session 5 with:
 
 ```
-npx convex import --table admins --prod --format jsonLines admins.jsonl
+npx convex import --table admins --prod --format jsonLines --append admins.jsonl
 ```
-
-with a single line, and **no** `tokenIdentifier` or `clerkUserId`:
 
 ```json
 {"email": "hello@vidyonnatifoundation.org", "name": "Vidyonnati Foundation", "role": "super_admin"}
 ```
 
-Leaving both identity fields out is the point. `lookupAdmin` falls through to
-the email match, and `requireAdminForWrite` binds the real Clerk identity on the
-first authenticated write. Dev's row is bound to the fake `user_testadmin`
-precisely because it was seeded with one; prod should not repeat that.
+**The absent fields are the point.** Verified with `npx convex data admins
+--prod`: the row has `email`, `name`, `role` and **no `tokenIdentifier` or
+`clerkUserId` at all**. `lookupAdmin` therefore falls through to the email
+match, and `requireAdminForWrite` binds the real Clerk identity on the first
+authenticated write. Dev's row is stuck on the fake `user_testadmin` precisely
+because it was seeded *with* one — prod does not repeat that mistake.
 
-Until this row exists, **`/admin` on production rejects everyone**, including
-`hello@vidyonnatifoundation.org`.
+So the first person to sign in as `hello@vidyonnatifoundation.org` on production
+claims the row. Nobody has yet.
 
 **Cheaper fallback worth checking first:** the goal is only to make Google see
 the client used. Clerk's hosted Account Portal on the *production* instance may
@@ -161,7 +162,7 @@ both. Details under "Wizard validation" below.
 |---|---|
 | Convex team / project | `vidyonnati-fondation` / `vidyonnati-foundation` |
 | Convex **dev** deployment | `dev:unique-dodo-576` → `https://unique-dodo-576.convex.cloud` |
-| Convex **prod** deployment | `amicable-narwhal-186` → `https://amicable-narwhal-186.convex.cloud` — **created in session 5, functions deployed, env vars set.** Site origin `https://amicable-narwhal-186.convex.site`. Data is empty except that the **admin row is still not seeded** (see below). |
+| Convex **prod** deployment | `amicable-narwhal-186` → `https://amicable-narwhal-186.convex.cloud` — **created in session 5, functions deployed, env vars set, admin row seeded.** Site origin `https://amicable-narwhal-186.convex.site`. Every other table is empty. |
 | Convex env vars (prod) | `CLERK_JWT_ISSUER_DOMAIN=https://clerk.vidyonnatifoundation.org` · `ALLOWED_WEB_ORIGINS=https://vidyonnatifoundation.org,https://www.vidyonnatifoundation.org` — both set and verified with `npx convex env list --prod` |
 | Convex env vars (dev) | `CLERK_JWT_ISSUER_DOMAIN=https://close-garfish-21.clerk.accounts.dev`. `ALLOWED_WEB_ORIGINS` is **unset**, which is fine in dev — `convex/http.ts` defaults to `http://localhost:3000`. Production must set it explicitly. |
 | Convex **site** origin (dev) | `https://unique-dodo-576.convex.site` — where HTTP actions are served, a different host from `.convex.cloud`. In `.env.local` as `NEXT_PUBLIC_CONVEX_SITE_URL`; needed on Vercel too. |
@@ -1008,10 +1009,9 @@ job deliberately rather than reflexively.
   Phase 4 section below.** Kept here only as a pointer, because three earlier
   phases deliberately refused to settle it and that history is the reason the
   answer is what it is.
-- ~~Production Convex deployment does not exist.~~ **Created in session 5** —
-  `amicable-narwhal-186`, functions deployed, both env vars set. The
-  `hello@vidyonnatifoundation.org` admin row is **still unseeded**; see step 3
-  of the chain above.
+- ~~Production Convex deployment does not exist.~~ **Fully set up in session 5**
+  — `amicable-narwhal-186`, functions deployed, both env vars set, admin row
+  seeded and unbound. The Convex side of the cutover is done.
 - **Vercel env vars** not set: `pk_live`/`sk_live`, prod
   `NEXT_PUBLIC_CONVEX_URL`, prod `NEXT_PUBLIC_CONVEX_SITE_URL`,
   `CONVEX_DEPLOY_KEY`. The full list, with the one that is *not* auto-injected
