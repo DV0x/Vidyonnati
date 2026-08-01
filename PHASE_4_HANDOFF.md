@@ -156,6 +156,59 @@ here, both worth recording:
    existed to match, `me.isAdmin` must have been true. Do not read a missing
    students row as a failed admin sign-in — it is the opposite.
 
+**The row bound itself as soon as a real admin write happened** (see the
+end-to-end run below). Both `clerkUserId` and `tokenIdentifier` are now set to
+the production identity. Point 1 above is therefore observed, not predicted.
+
+## End-to-end on production — the whole system, exercised
+
+Run on 2026-08-01 against the live site: a real scholarship application
+submitted as a student, put into `needs_info` by the admin, resubmitted, and a
+donation placed. `npx convex logs --prod` tailed throughout and captured
+**zero errors**.
+
+| What | Result |
+|---|---|
+| Application | `VF-97503244`, first-year, ends `under_review` |
+| Documents | **6** rows — `student_photo`, `aadhar_student`, `aadhar_parent`, `bank_passbook`, `bonafide_certificate`, `ssc_marksheet` |
+| Mime types | `application/pdf` · `image/jpeg` · `image/png`, all read from `_storage`, not from the client |
+| `searchText` | `agency agency5027@gmail.com VF-97503244` — built, so admin search finds it |
+| Donation | `DON-59655882`, ₹500, `pending`, rate limiter allowed the first submission |
+| `adminActivityLog` | one `status_change`, `pending → needs_info`, with `reviewerNotes`, attributed to the `admins` row id |
+| `admins` binding | `clerkUserId` + `tokenIdentifier` written by `requireAdminForWrite` |
+
+**Counter arithmetic came out exactly right** — the failure this doc warns about
+most, and it did not happen:
+
+```
+applications:status:pending      0
+applications:status:needs_info   0
+applications:status:under_review 1
+donations:status:pending         1
+```
+
+That traces `pending → needs_info → under_review` with **both halves firing at
+every hop**. One application exists; exactly one counter holds 1.
+
+### One thing that looks like a gap and is not
+
+The activity log has **one** entry while the application made **two**
+transitions. Correct: the second (`needs_info → under_review`) was the
+student's resubmit, and `applications.update` flips that status server-side. It
+is not an admin action, so it logs nothing and attributes to nobody.
+
+### The document route on production
+
+The last thing that had only ever run in dev — `ALLOWED_WEB_ORIGINS` is
+per-deployment, and production's value had been set but never exercised. Tested
+directly against `amicable-narwhal-186.convex.site`:
+
+| Case | Result |
+|---|---|
+| `GET /documents` unauthenticated | **401** |
+| `OPTIONS` preflight from `https://vidyonnatifoundation.org` | **204** + `access-control-allow-origin` for that origin |
+| `OPTIONS` from an unlisted origin | **403** — fails closed, as designed |
+
 ### Step 3: the prod admin row — seeded, and deliberately unbound
 
 **Nothing in the codebase inserts into `admins`** — dev's row was created by
