@@ -61,13 +61,46 @@ bug listed below.
   over `.collect()` — both are explicit rules in the Convex guidelines.
 - **Authorization lives in Convex function bodies**, not middleware. Convex has
   no RLS. `proxy.ts` route matching is a UX affordance only.
+- **`npx convex run --identity` cannot call internal functions.** With the flag
+  it runs through the public path and reports "Could not find function" for
+  anything `internal*` — while still printing that function in the available
+  list, which makes it look like a name problem. Without the flag it uses the
+  admin path and internal functions work. To test an internal function *as a
+  user*, go through the real surface with a real token.
+- **`ctx.auth` does propagate through `ctx.runQuery`** from an HTTP action into
+  an internalQuery — verified in Phase 4, not assumed. So the query re-derives
+  identity from its own `ctx.auth` and never takes a caller id as an argument.
+- **HTTP actions are served from `*.convex.site`**, a different origin from the
+  `.convex.cloud` URL the reactive client uses. Any browser fetch to them is
+  cross-origin, and an `Authorization` header forces an `OPTIONS` preflight —
+  without an OPTIONS route the GET never leaves the browser. The origin
+  allowlist (`ALLOWED_WEB_ORIGINS`) is a **per-deployment** Convex env var, the
+  same per-instance trap as the Clerk settings.
+- **Never mint `ctx.storage.getUrl()` for a private document.** It has no expiry
+  and cannot be withdrawn short of deleting the object. Private files go through
+  the authorized route in `convex/http.ts`; `getUrl()` is only for spotlight
+  photos that are published on the homepage anyway.
+- **A schema existing does not mean it is wired.** Both wizards had complete zod
+  schemas and step-field maps and **no resolver**, so nothing was ever validated
+  — for the entire life of the project, until session 4. Before reasoning about
+  what validation does, check that it is actually connected: grep for
+  `resolver`, not for the schema.
+- **Both wizards validate through a ref-driven resolver.** `flatApplicationSchema`
+  / `flatSpotlightSchema` flatten the per-step schemas (the combined ones are
+  nested and cannot be used directly). The ref carries `applicationType` and the
+  edit-mode file exemptions, and is written **in an effect** — a ref write during
+  render is unsafe and `react-hooks/refs` errors on it.
+- **In edit mode a document already on the server satisfies its file field.**
+  File fields validate `instanceof File`, which a stored row is not; without the
+  exemption a `needs_info` resubmit demands every Aadhaar and passbook again.
+  The submit path only uploads files the student re-selected, so this is safe.
 
 ## Project docs
 
-- `PHASE_3_HANDOFF.md` — **start here.** Current state, what is proven, and the
-  sequenced next steps. Renamed from `PHASE_2_HANDOFF.md` as of session 3; there
-  is deliberately only ever one of these, updated in place, so it cannot go
-  stale against a second copy.
+- `PHASE_4_HANDOFF.md` — **start here.** Current state, what is proven, and the
+  sequenced next steps. Renamed each time a phase lands (`PHASE_2` → `PHASE_3` →
+  `PHASE_4`, as of session 4); there is deliberately only ever one of these,
+  updated in place, so it cannot go stale against a second copy.
 - `CONVEX_MIGRATION_PLAN.md` — architecture, schema, phase plan, risks
 - `ARCHITECTURE.md` — pre-migration reference (still accurate for UI/routing;
   its Supabase sections are historical)

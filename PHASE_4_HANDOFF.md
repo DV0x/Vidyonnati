@@ -5,18 +5,30 @@ plan live in `CONVEX_MIGRATION_PLAN.md`; this file is **current state, what is
 proven, what is broken, and what to do next**.
 
 There is deliberately only ever **one** of these, updated in place and renamed as
-phases land (`PHASE_2_HANDOFF.md` → `PHASE_3_HANDOFF.md`). Session 3 opened by
-finding a "nothing has been committed" line in it that was four commits out of
-date — so the standing rule is: **correct this file as part of the work, not
-after it**, and never fork a second copy that can disagree with it.
+phases land (`PHASE_2_HANDOFF.md` → `PHASE_3_HANDOFF.md` → `PHASE_4_HANDOFF.md`).
+Session 3 opened by finding a "nothing has been committed" line in it that was
+four commits out of date — so the standing rule is: **correct this file as part
+of the work, not after it**, and never fork a second copy that can disagree with
+it. Session 4 renamed it and rewrote every section Phase 4 falsified, including
+three passages that still described the serving decision as open.
 
-**As of:** 2026-07-31, end of session 3
-**Phases done:** 0 (setup), 0.5 (hardening), 1 (schema + auth), 2a + 2b, **3**
-**Branch:** `convex-migration`, 5 commits ahead of `main`, clean, nothing merged
+**As of:** 2026-08-01, end of session 4
+**Phases done:** 0 (setup), 0.5 (hardening), 1 (schema + auth), 2a + 2b, 3, **4**
+**Branch:** `convex-migration`, 6 commits ahead of `main` + uncommitted Phase 4
 
 Every read *and* every write is on Convex, and **Supabase has been deleted from
 the codebase** — all 22 API routes, both client wrappers, the generated row
 types, and the two npm packages. The build emits no `/api` routes.
+
+Phase 4 landed in session 4: private documents are served by an authorized HTTP
+action, so **an admin can now actually open a marksheet while reviewing** — the
+thing that gated any real use of the system. The Phase 4 decision is closed; see
+that section below for what was chosen and why.
+
+Session 4 also found, while testing that, that **neither application wizard had
+any client-side validation at all** — a student could walk from step 0 to Review
+with an empty form and submit it. That is now fixed and has its own section
+below. It predates the migration entirely.
 
 ---
 
@@ -39,7 +51,7 @@ The chain standing between here and a production Google sign-in:
 | 1 | Create the **production Convex deployment** | does not exist |
 | 2 | Set `CLERK_JWT_ISSUER_DOMAIN` on it to the **production** Clerk issuer (`clerk.vidyonnatifoundation.org`), not the dev one | — |
 | 3 | Seed the `hello@vidyonnatifoundation.org` admin row there (prod starts empty) | — |
-| 4 | Set Vercel env vars: `pk_live`/`sk_live`, prod `NEXT_PUBLIC_CONVEX_URL`, `CONVEX_DEPLOY_KEY` | none set |
+| 4 | Set Vercel env vars: `pk_live`/`sk_live`, prod `NEXT_PUBLIC_CONVEX_URL`, prod `NEXT_PUBLIC_CONVEX_SITE_URL`, `CONVEX_DEPLOY_KEY`; and `ALLOWED_WEB_ORIGINS` on the prod **Convex** deployment | none set |
 | 5 | Deploy — **Convex functions before the frontend**, per CLAUDE.md | — |
 | 6 | Actually sign in with Google on production | — |
 
@@ -51,15 +63,21 @@ been verified — check it before assuming the full cutover is the only path.
 
 ### Recommended order
 
-1. **De-risk the Google deadline** — the fallback above if it works, otherwise
-   steps 1–6.
-2. **Phase 4 — private document serving.** The open decision below. Until it
-   lands, no document is downloadable anywhere: not in the student dashboard, not
-   in admin review. Admins currently cannot see an applicant's marksheet or bank
-   passbook, which makes real reviewing impossible, so this gates any actual use
-   of the system even though it does not gate the deadline.
-3. **Rate limiting** on the two public mutations (below).
-4. **Merge to `main`.** Five phase commits are sitting on `convex-migration`.
+Decided in session 4: **Google is handled last, by shipping to production** —
+step 6 below is a production Google sign-in, so the deadline is discharged as a
+side effect of the cutover rather than as separate work. That leaves ~2 weeks for
+steps 1–3, which is workable but has no slack.
+
+1. ~~Phase 4 — private document serving.~~ **Done in session 4.**
+2. **Rate limiting** on the two public mutations (below). Its own component
+   install and its own deploy.
+3. **Merge to `main`.** Six phase commits plus Phase 4 are sitting on
+   `convex-migration`.
+4. **Production cutover** — the six-step chain above. Note it now needs two more
+   Convex/Vercel settings that did not exist before Phase 4:
+   `NEXT_PUBLIC_CONVEX_SITE_URL` (Vercel) and `ALLOWED_WEB_ORIGINS`
+   (Convex env var on the prod deployment). Both are listed in the env map below.
+5. **Google sign-in on production**, which clears the 2026-08-15 deadline.
 
 ### Before touching anything
 
@@ -83,7 +101,8 @@ submission. Written up under Phase 3 below.
 | Convex team / project | `vidyonnati-fondation` / `vidyonnati-foundation` |
 | Convex **dev** deployment | `dev:unique-dodo-576` → `https://unique-dodo-576.convex.cloud` |
 | Convex **prod** deployment | **does not exist yet** |
-| Convex env var (dev) | `CLERK_JWT_ISSUER_DOMAIN=https://close-garfish-21.clerk.accounts.dev` |
+| Convex env vars (dev) | `CLERK_JWT_ISSUER_DOMAIN=https://close-garfish-21.clerk.accounts.dev`. `ALLOWED_WEB_ORIGINS` is **unset**, which is fine in dev — `convex/http.ts` defaults to `http://localhost:3000`. Production must set it explicitly. |
+| Convex **site** origin (dev) | `https://unique-dodo-576.convex.site` — where HTTP actions are served, a different host from `.convex.cloud`. In `.env.local` as `NEXT_PUBLIC_CONVEX_SITE_URL`; needed on Vercel too. |
 | Clerk **dev** instance | `close-garfish-21.clerk.accounts.dev` |
 | Clerk **prod** instance | `clerk.vidyonnatifoundation.org` (DNS + TLS verified) |
 | Vercel project | `vidyonnati`, custom domain `vidyonnatifoundation.org`, deploys via GitHub integration (repo is **not** linked locally — no `.vercel/`) |
@@ -147,6 +166,10 @@ Phase 3 additionally proved, against the live deployment:
 - **Orphan sweep** deleting an unreferenced file while leaving a referenced one.
 - **Reorder atomicity**: a batch containing one bad id wrote nothing at all.
 
+Phase 4 additionally proved the **document serve path** with real Clerk JWTs —
+anonymous, non-student, non-owner, owner, admin, malformed id, wrong kind, and
+both CORS directions. The full table is in the Phase 4 section.
+
 Admins are **pre-authorized by email** and bind their `clerkUserId` /
 `tokenIdentifier` on first authenticated write (`lookupAdmin` →
 `requireAdminForWrite` in `convex/lib/auth.ts`). Nobody has signed in as that
@@ -183,9 +206,28 @@ Two things to know before signing in as the admin:
 
 ## What is broken right now
 
-Nothing known. `tsc --noEmit` 0 errors · `eslint .` 0 errors, **56 warnings**
-(one below the post-2b baseline of 57) · `npm run build` succeeds, 30 pages —
-down from 46 because the 22 API routes are gone.
+Nothing known. `tsc --noEmit` 0 errors · `eslint .` 0 errors, **53 warnings**
+(down from 56 after Phase 4) · `npm run build` succeeds — no `/api` routes, down
+from 46 pages pre-migration.
+
+Session 4 also fixed three defects that predate it. The wizard validation gap has
+its own section below; the other two were found while wiring photo rendering and
+were invisible until then:
+
+- **`next.config.js` allowlisted the dead Supabase host and not Convex.**
+  `/admin/spotlight` and `StudentCard` both render Convex `storage.getUrl()`
+  URLs through `next/image`, which throws "hostname is not configured under
+  images" at render time. It had never fired because the only featured row has
+  no photo and `StudentSpotlightSection` is commented out of the homepage. The
+  host is now derived from `NEXT_PUBLIC_CONVEX_URL`, so dev and prod are both
+  correct without a wildcard that would let the optimizer be pointed at another
+  deployment. `images.unsplash.com` (StudentCard's placeholder portraits) was
+  missing too, and the Supabase entry is gone.
+- **sonner's `<Toaster />` was never mounted.** The root layout mounts the
+  shadcn/`useToast` one; six files import `toast` from `sonner` and every
+  `toast.success` / `toast.error` in them — all the admin save confirmations and
+  review errors — resolved to nothing at all. Both are mounted now, rather than
+  rewriting six files onto one system mid-migration.
 
 The `STILL SUPABASE, STILL 401` markers are gone; every one of those call sites
 is a Convex mutation now.
@@ -284,9 +326,9 @@ Its `FeaturedStudent` type mirrors `Student` in `app/components/StudentCard.tsx`
 — 10 fields, nothing else. Never spread a document into that result.
 
 **Documents return metadata, no URLs.** `storageId` / `fileName` / `mimeType`
-only. Minting a `ctx.storage.getUrl()` would silently settle the Phase 4 open
-decision in favour of permanent, unrevocable capability URLs over Aadhaar cards
-and bank passbooks. Left open on purpose.
+only — and this stayed true through Phase 4. The serve path takes a document
+**row id** and authorizes it per request; no query anywhere hands the client a
+`storage.getUrl()` string for a private file.
 
 **Schema gaps closed** (free now, a backfill migration later — tables are empty):
 
@@ -400,12 +442,9 @@ Three things the type checker caught that the old code did not:
   time a reviewer clicked "Load more". Gated on `LoadingFirstPage` instead.
 - Every stale snake_case field reference, across 289 of them.
 
-**Documents render no download links and no photos.** Serving those files is
-Phase 4, where the open decision between permanent `storage.getUrl()` capability
-URLs and a token-authorized HTTP action gets made — they are Aadhaar cards and
-bank passbooks. A dead button would be worse than none. `/admin/spotlight`'s
-photo column has a second problem: the Supabase table had a `photo_url` column
-with no Convex equivalent, so the photo has to come from `spotlightDocuments`.
+**Documents rendered no download links and no photos** at the end of 2b — a
+dead button would have been worse than none while the serving decision was open.
+**Phase 4 filled all of them in;** see that section.
 
 Lint went from 69 warnings to **57** — below the pre-2b baseline, because the
 conversion deleted the `useEffect` + `fetch` + `setState` pattern rather than
@@ -432,13 +471,20 @@ rendering. Worth doing; worth doing on its own, with the flow tested.
 
 ## Lint debt — where it actually stands
 
-`eslint .` is **0 errors, 56 warnings**, in two piles:
+`eslint .` is **0 errors, 53 warnings**, in two piles:
 
 | Count | Rule |
 |---|---|
-| 38 | `@typescript-eslint/no-unused-vars` |
+| 35 | `@typescript-eslint/no-unused-vars` |
 | 12 | `react-hooks/set-state-in-effect` |
 | 6 | one-offs (`no-explicit-any` ×2, `no-img-element`, `incompatible-library`, `purity`, `no-anonymous-default-export`) |
+
+Phase 4 took three off the unused-vars pile (imports it put back to work) and
+added **none** to `set-state-in-effect`, which is worth knowing for next time:
+`useDocumentObjectUrl` does call `setState` inside an effect, but after an
+`await`. The rule targets *synchronous* setState during the effect — the
+cascading-render case — so an async resolve does not trip it. The claim that
+none of the remaining 12 are data fetching still holds.
 
 `set-state-in-effect` is downgraded to `warn` in `eslint.config.mjs`. It started
 at 24, on the theory that the `useEffect`+`fetch`+`setState` pattern would
@@ -580,6 +626,201 @@ either. Free to change now; the table is empty.
 
 ---
 
+## Phase 4 — private document serving (complete)
+
+### The decision, finally made
+
+Deferred on purpose in 2a, 2b and 3 so that no phase could settle it by
+accident. Settled in session 4 as: **private documents are served by an
+authorized HTTP action, and `ctx.storage.getUrl()` is never used for them.**
+
+The premise was re-checked against the installed types rather than taken from
+the earlier notes, and it holds — `getUrl()` returns a URL with no expiry whose
+only invalidation is deleting the object: *"Once a file is deleted, any URLs
+previously generated by getUrl will return 404s."* Anyone who ever sees the
+string can fetch that Aadhaar card forever, and it leaks through browser
+history, server logs, `Referer` headers and forwarded links.
+
+Public spotlight photos **keep** plain `getUrl()` in `featured.ts` and
+`admin.ts`. They are published on the homepage by design, so a permanent URL
+costs nothing. That split is the whole design.
+
+### What was built
+
+| File | What |
+|---|---|
+| `convex/http.ts` (new) | `GET /documents?kind=…&id=…` + an `OPTIONS` preflight, CORS scoped to an origin allowlist |
+| `convex/documents.ts` (appended) | `authorizeDownload` — an **internalQuery**, unreachable from the internet |
+| `hooks/use-document-download.ts` (new) | `useDocumentDownload` (blob download) and `useDocumentObjectUrl` (inline photo) |
+
+The authorization lives in a query because HTTP actions have no `ctx.db`. It
+re-derives identity from its own `ctx.auth` and takes nothing about the caller as
+an argument. Admin-or-owner is checked with `lookupAdmin` / `lookupStudent`
+rather than the `require*` guards, so a non-admin falls through to the ownership
+check instead of throwing.
+
+**Not-a-student, no-such-document and not-yours all return the same 404**, so the
+route cannot be used to learn which document ids exist. A malformed id is
+`normalizeId`'d to a clean 404 rather than an `ArgumentValidationError` surfacing
+as a 500.
+
+### Why the client fetches instead of linking
+
+Authorization travels in a header, and neither `<a href>` nor `<img src>` can set
+one. So the bytes are fetched with `Authorization: Bearer`, turned into a
+`blob:` URL, used, and revoked. Nothing shareable is ever produced — no history
+entry, no `Referer`, nothing to forward. `getToken()` is called with **no
+template argument**, the trap CLAUDE.md records.
+
+Two consequences worth knowing:
+
+- HTTP actions are served from `*.convex.site`, a **different origin** from the
+  `.convex.cloud` host the reactive client uses. That is why CORS exists in
+  `http.ts` at all, and why an `Authorization` header forces a preflight — without
+  the `OPTIONS` route the GET never leaves the browser.
+- `ALLOWED_WEB_ORIGINS` is per-deployment and **fails closed**: an unlisted
+  origin gets no CORS headers and the browser discards the response. Dev works
+  with no config because the default is `http://localhost:3000`; production must
+  set it. Same per-instance trap as the Clerk settings.
+
+### Verified against the live deployment
+
+With **real Clerk JWTs** (minted through the Clerk Backend API, `aud: "convex"`
+confirmed), not by inspection:
+
+| Case | Result |
+|---|---|
+| Anonymous | 401 |
+| Authenticated, no student row | 404 |
+| Authenticated student, **not the owner** | 404 |
+| Owner | 200, exact bytes, `image/png` |
+| Admin (via `lookupAdmin`'s email fallback) | 200, exact bytes |
+| Malformed id / right id + wrong `kind` | 404 |
+| Missing params | 400 |
+| Preflight from `localhost:3000` / an unlisted origin | 204 + CORS / 403 |
+| GET from `localhost:3000` / an unlisted origin | 200 + CORS / 200 with no CORS |
+
+This also settled the one API question worth being unsure about: **`ctx.auth`
+does propagate through `ctx.runQuery` from an HTTP action to an internalQuery.**
+`requireIdentity` inside the query does not throw on a real request, so the
+identity survives the hop. `npx convex run --identity` is **not** a way to test
+this — that flag runs through the public path and cannot call internal functions
+at all.
+
+Test scaffolding was cleaned up: the throwaway Clerk user was deleted, the probe
+`students` row removed, the temporary mutation deleted, and the seeded admin
+row's email restored to `hello@vidyonnatifoundation.org`.
+
+### Surfaces wired
+
+Admin scholarship review, admin spotlight review, student application detail,
+student spotlight detail, and **both wizards' edit-mode badges** — a student
+replacing a document can now check which one is actually on file first.
+
+`app/components/ExistingDocuments.tsx` holds both wizard-side pieces:
+`ExistingDocBadge` (filename + download, for PDFs) and `ExistingPhotoPreview`
+(the image itself, for the photo fields). The photo upload lives on the
+**Personal** step, not the Documents step — which is what the spotlight
+Documents step's "go back to the first step to replace it" note refers to, and
+why the preview had to be added there.
+
+The two review photos go through the authorized route, not the public one:
+`featured.ts` only ever mints URLs for **featured** entries, and an applicant
+under review usually is not featured, so their photo has never been public. That
+also closes the `/admin/spotlight` `photo_url` wrinkle the earlier notes flagged
+as open — `admin.ts:409` already sources it from `spotlightDocuments`.
+
+## Wizard validation — it never existed (fixed in session 4)
+
+Found by clicking through the resubmit flow, not by reading anything. Worth
+recording in full because the *diagnosis* was wrong twice before it was right,
+and both wrong turns came from inferring instead of running.
+
+### What was actually broken
+
+Both wizards called `useForm({ mode: "onChange", defaultValues })` with **no
+`resolver`**, and no field was registered with validation rules. `zodResolver`
+appeared exactly once in the codebase, in `HelpInterestDialog`. So every schema
+in `lib/schemas/application.ts` and `lib/schemas/spotlight.ts` was defined and
+never executed.
+
+Consequences:
+
+- `trigger(fields)` returned `true` unconditionally, so **every step advanced no
+  matter what**. A student could reach Review with an entirely empty form.
+- Convex validates types, not completeness — `v.string()` accepts `""` — so a
+  near-empty application with zero documents would be created successfully.
+- Every `{errors.fullName && <p>…</p>}` block in every step was dead code,
+  because `errors` was permanently empty.
+
+### The fix
+
+`flatApplicationSchema()` and `flatSpotlightSchema()` merge the existing
+per-step schemas into the flat shape react-hook-form actually holds — the
+`firstYearApplicationSchema` / `secondYearApplicationSchema` combinations could
+not be used directly because they are **nested** (`personalInfo: {…}`).
+
+The schemas turned out to match the step maps **exactly**, step for step; they
+had simply never been connected. The only extra key is `studentPhoto` appearing
+in the documents schema as well as personal info, which is harmless.
+
+The resolver reads `applicationType` and the edit-mode exemptions from a ref
+written **in an effect**, not during render — `react-hooks/refs` rejects a render
+write, and it is genuinely unsafe under concurrent rendering. The resolver only
+runs on user interaction, which is always after effects have flushed.
+
+### Edit mode: a document on the server satisfies its field
+
+File fields validate `instanceof File`, and edit mode never populates them
+because a stored document is a row, not a File. Left alone, a `needs_info`
+resubmit would demand every Aadhaar and bank passbook over again. So
+`fileFieldToDocumentType` maps each file field to its `documentType`, and
+anything already on the server is `.extend()`ed to optional in the schema *and*
+dropped from the `trigger()` field list.
+
+Safe because the submit path has always uploaded only the files the student
+re-selected — leaving one out means "keep the one I have", which is the whole
+point of a resubmit.
+
+### Verified
+
+Schemas, in isolation: an empty form is rejected with 29 / 41 / 25 issues
+(first-year, second-year, spotlight); exempting the six file fields clears
+exactly those six and leaves the other 23 issues untouched.
+
+End to end, against the dev deployment: a real `needs_info` resubmit of
+`VF-18985531` refused to leave the documents step until five files were
+uploaded, **did not** ask for the photo already on file, attached all five to
+the correct `documentType` with mime types read from `_storage`, flipped the
+status to `under_review` server-side, and moved both counter halves.
+
+### Two wrong diagnoses on the way, both from inferring
+
+1. Read the zod schemas and the step-field maps, concluded edit mode *blocked*
+   on required files. It did not — nothing blocked, ever, because the schemas
+   were not wired to the form. The first "fix" was therefore inert: correct code
+   narrowing a field list handed to a `trigger()` that validated nothing.
+2. Audited fields with a regex matching only string literals in
+   `register`/`watch`/`setValue`, and reported four fields as never collected.
+   They are collected — `EducationStep` names them through a ternary
+   (`register(isFirstYear ? "collegeAdmitted" : "currentCollege")`). The form
+   was accurate; the audit was not.
+
+Both were caught by the user, not by the checks. The standing rule in CLAUDE.md
+earned its place again: verify against runtime values, not against what the
+source appears to say.
+
+### Also removed
+
+`app/apply/components/steps/StatementStep.tsx` — 108 orphaned lines. Added and
+rendered in `c168728`, dropped from the wizard in `d75b2e3` ("Restructure
+application form to match paper forms") but never deleted. Its five essay fields
+(`whyNeedScholarship`, `progressReport`, `educationalGoals`,
+`careerAspirations`, `challengesFaced`) exist in no schema, no step map and no
+Convex table; what survived that restructure became the second-year essays on
+the Documents step. The spotlight equivalent, `StoryGoalsStep`, is live and
+unaffected.
+
 ## Open decisions / not yet done
 
 - **Rate limiting on the two public mutations.** `donations.create` and
@@ -595,30 +836,10 @@ either. Free to change now; the table is empty.
   deploy, and burying it inside a port would hide it.
 - **Clerk `user.created` webhook → Convex HTTP action.** Not built. The lazy
   `getOrCreateStudent` safety net covers it, so this is an optimization.
-- **Private document serving — Phase 4, and the largest remaining piece.**
-
-  Convex `storage.getUrl()` returns a **permanent, unrevocable** URL: anyone
-  holding the string can fetch the file forever, with no auth check and no way
-  to withdraw it short of deleting the object. These are Aadhaar cards and bank
-  passbooks. The migration plan recommends a token-authorized HTTP action for
-  private documents and plain `getUrl()` only for public spotlight photos.
-
-  **The decision is still open and has been left open on purpose** three times
-  now — in 2a (`studentData.ts` returns `storageId`/`fileName`/`mimeType` and
-  never mints a URL), in 2b (document rows render no download link), and in 3
-  (uploading was ported, serving was not). Each of those would have settled it
-  by accident. Do not let a fourth one settle it either; decide it deliberately.
-
-  Groundwork already in place: `applicationDocuments` and `spotlightDocuments`
-  both carry a `by_storageId` index, added in Phase 3 for the orphan sweeper but
-  equally the reverse lookup an authorizing serve path needs.
-
-  What this blocks: every document surface in the app. Students cannot download
-  what they uploaded, and **admins cannot open a marksheet, an Aadhaar card or a
-  bank passbook while reviewing** — which means no application can actually be
-  assessed, however well the status workflow now works. One deliberate extra
-  wrinkle on `/admin/spotlight`: the Supabase table had a `photo_url` column
-  with no Convex equivalent, so that photo has to come from `spotlightDocuments`.
+- ~~Private document serving.~~ **Decided and built in session 4 — see the
+  Phase 4 section below.** Kept here only as a pointer, because three earlier
+  phases deliberately refused to settle it and that history is the reason the
+  answer is what it is.
 - **Production Convex deployment** does not exist; when created it starts empty
   and needs the `hello@vidyonnatifoundation.org` admin row seeded again, plus
   `CLERK_JWT_ISSUER_DOMAIN` set to the **production** issuer.
@@ -631,8 +852,8 @@ either. Free to change now; the table is empty.
 
 ## Housekeeping
 
-- **The migration is committed.** Branch `convex-migration`, 4 commits ahead of
-  `main`, working tree clean:
+- **The migration is committed.** Branch `convex-migration`, 10 commits ahead of
+  `main`:
 
   | Commit | Covers |
   |---|---|
@@ -640,11 +861,15 @@ either. Free to change now; the table is empty.
   | `678c17c` | Phase 2a — read paths |
   | `e9c5699` | Phase 2b part 1 — public pages + student dashboard |
   | `98c845b` | Phase 2b part 2 — admin pages |
+  | `0f8b15d` | Phase 3 — write paths + removal of the Supabase surface |
+  | `d218cf9` | Docs — handoff rename + next-session plan |
+  | *(session 4)* | Phase 4 — authorized private document serving |
+  | *(session 4)* | next/image host allowlist + sonner Toaster mount |
+  | *(session 4)* | Wizard validation, edit-mode file exemption, StatementStep removal |
+  | *(session 4)* | Docs — this file + CLAUDE.md |
 
   Each phase is its own commit, so any of them is a rollback point. Nothing has
   been merged to `main` yet.
-
-  Phase 3 is `HEAD` — write paths plus the removal of the Supabase surface.
 - Session 1 left `npx convex logs` and a Next dev server on port 3000 running as
   background tasks. Those task IDs died with that session; if either process is
   still alive it is orphaned and safe to kill.
