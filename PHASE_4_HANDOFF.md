@@ -68,9 +68,12 @@ The chain standing between here and a production Google sign-in:
 | 1 | Create the **production Convex deployment** | ✅ `amicable-narwhal-186` |
 | 2 | Set `CLERK_JWT_ISSUER_DOMAIN` on it to the **production** Clerk issuer (`clerk.vidyonnatifoundation.org`), not the dev one | ✅ set, plus `ALLOWED_WEB_ORIGINS` |
 | 3 | Seed the `hello@vidyonnatifoundation.org` admin row there (prod starts empty) | ✅ seeded, **unbound** — see below |
-| 4 | Set Vercel env vars | ⬜ **4 of 5 set** — only `CONVEX_DEPLOY_KEY` left, plus the build-command decision |
-| 5 | Deploy — **Convex functions before the frontend**, per CLAUDE.md | ⬜ Convex side ✅ done; frontend not deployed |
+| 4 | Set Vercel env vars | ✅ **all 5 set** (Production scope), build command in `vercel.json` |
+| 5 | Deploy — **Convex functions before the frontend**, per CLAUDE.md | ⬜ Convex side ✅ done; frontend ships on merge to `main` |
 | 6 | Actually sign in with Google on production | ⬜ |
+
+**Steps 1–4 are done. The merge is step 5**, and it is the first thing in this
+whole migration that changes what the public sees.
 
 ### Step 3: the prod admin row — seeded, and deliberately unbound
 
@@ -1030,7 +1033,7 @@ That also appended `VERCEL_OIDC_TOKEN` to `.env.local` and added a redundant
 | `NEXT_PUBLIC_CONVEX_SITE_URL` | `https://amicable-narwhal-186.convex.site` | ✅ set (Production) |
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | `pk_live_…` (decodes to `clerk.vidyonnatifoundation.org$`) | ✅ set (Production) |
 | `CLERK_SECRET_KEY` | `sk_live_…` | ✅ set (Production, sensitive) |
-| `CONVEX_DEPLOY_KEY` | a prod deploy key | ❌ **not set** — no CLI command mints one; dashboard only |
+| `CONVEX_DEPLOY_KEY` | `prod:amicable-narwhal-186\|…` | ✅ set (Production, sensitive) |
 
 The app reads only `NEXT_PUBLIC_CONVEX_URL` and `NEXT_PUBLIC_CONVEX_SITE_URL`
 directly; the two Clerk keys are read by `@clerk/nextjs` itself.
@@ -1043,36 +1046,52 @@ three `SUPABASE_*` vars, until that rollback path is retired.
 > **Rotate it.** Clerk supports multiple secret keys, so a new one can be issued
 > and the old revoked without downtime.
 
-### The build command — and the preview-deployment trap
+### The build command
 
-The intended setting is:
+`vercel.json` (new, committed on this branch) sets:
 
-```
-npx convex deploy --cmd 'npm run build'
+```json
+{ "buildCommand": "npx convex deploy --cmd 'npm run build'" }
 ```
 
 This mechanically enforces CLAUDE.md's "deploy Convex functions before the
 frontend" rule: `convex deploy` pushes functions and only then runs the build,
-so a failed push means no frontend ships.
+so a failed push means no frontend ships. In the repo rather than in dashboard
+settings so it is reviewable, version-controlled, and — because `main` does not
+have the file — it cannot take effect until the merge.
 
-⚠️ **But a Vercel build command applies to every environment, and
-`CONVEX_DEPLOY_KEY` is Production-scoped.** Set the build command with no key on
-Preview and **every preview build fails** — `convex deploy` has no deployment to
-target. Three ways out, unresolved as of session 5:
+The deploy key is scoped to **`deployment:deploy` only**. Not "Select all": that
+would have granted `deployment:data:write` (rewrite any production row),
+`deployment:env:write` (change `CLERK_JWT_ISSUER_DOMAIN` and break auth) and
+`functions:runInternalMutations` (invoke internal functions directly, bypassing
+every guard in `convex/lib/auth.ts`) to a key living in Vercel's environment. If
+a build ever fails naming a missing scope, add that one box — do not escalate.
 
-1. **Also create a Convex _preview_ deploy key** and set `CONVEX_DEPLOY_KEY` on
-   Preview scope. Convex spins up a throwaway preview deployment per branch.
-   The most correct answer if previews are used at all.
-2. **Leave the build command as `npm run build`** and run `npx convex deploy`
-   by hand before each merge. Works — functions are already deployed and
-   current — but it puts the CLAUDE.md ordering rule back on human memory,
-   which is exactly what it exists to avoid.
-3. Accept broken previews.
-
-⚠️ Also: `--cmd` injects `NEXT_PUBLIC_CONVEX_URL` automatically (verified via
+⚠️ `--cmd` injects `NEXT_PUBLIC_CONVEX_URL` automatically (verified via
 `npx convex deploy --help`: `--cmd-url-env-var-name`, auto-detected for Next.js)
 — but **`NEXT_PUBLIC_CONVEX_SITE_URL` is a variable this project invented in
 Phase 4 and nothing injects it.** It is set explicitly above for that reason.
+
+### Preview deployments are broken, and were before this
+
+**Preview scope has only the three `SUPABASE_*` vars and `NEXT_PUBLIC_APP_URL`**
+— no Convex URL, no Clerk keys. `app/ConvexClientProvider.tsx:17` constructs
+`new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!)` at **module scope**,
+and the root layout wraps every page in that provider, so prerendering any
+static page throws when the variable is absent.
+
+That means preview builds fail after the merge **whatever the build command
+is** — the build command was not the cause and changing it is not the fix. This
+was checked rather than assumed (`vercel env ls preview`).
+
+Making previews work is its own piece of work, not a cutover step: Preview-scoped
+`NEXT_PUBLIC_CONVEX_URL` / `NEXT_PUBLIC_CONVEX_SITE_URL` / Clerk keys, plus a
+Convex **preview** deploy key (configured at project level, not on a single
+deployment — this one is scoped to `amicable-narwhal-186`).
+
+**Practical consequence for the merge:** merging via a pull request will show a
+failed preview check. Merging by pushing `main` directly will not, because no
+preview is built.
 - **No test suite.** Real gap for a system holding bank details; deliberately
   out of scope during the migration.
 
