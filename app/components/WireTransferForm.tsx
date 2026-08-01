@@ -107,7 +107,7 @@ export function WireTransferForm({
             onClick={onSubmit}
             className="bg-primary hover:bg-primary/90 transition-all duration-300 hover:shadow-lg"
           >
-            I've Completed the Transfer
+            I’ve Completed the Transfer
           </Button>
         </motion.div>
       </div>

@@ -97,7 +97,7 @@ function TestimonialCard({ testimonial, index }: { testimonial: Testimonial; ind
 
         {/* Content */}
         <p className="text-gray-700 leading-relaxed mb-6 flex-grow">
-          "{testimonial.content}"
+          “{testimonial.content}”
         </p>
 
         {/* Author */}

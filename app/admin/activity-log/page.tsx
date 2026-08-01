@@ -1,13 +1,16 @@
 "use client"
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { motion } from 'motion/react'
-import type { AdminActivityLog, Admin } from '@/types/database'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { useQuery, usePaginatedQuery } from 'convex/react'
+import type { FunctionReturnType } from 'convex/server'
+import { api } from '@/convex/_generated/api'
+import type { Id } from '@/convex/_generated/dataModel'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Select,
@@ -17,9 +20,6 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import {
-  ChevronLeft,
-  ChevronRight,
-  RefreshCw,
   History,
   CheckCircle2,
   XCircle,
@@ -33,14 +33,8 @@ import {
   ExternalLink,
 } from 'lucide-react'
 
-interface ActivityLogResponse {
-  activities: (AdminActivityLog & { admin: { name: string | null; email: string } })[]
-  admins: Admin[]
-  total: number
-  page: number
-  pageSize: number
-  totalPages: number
-}
+type ActivityEntry =
+  FunctionReturnType<typeof api.admin.activityLog>['page'][number]
 
 const actionTypeConfig: Record<string, { label: string; className: string }> = {
   status_change: { label: 'Status Change', className: 'bg-blue-100 text-blue-800' },
@@ -87,44 +81,28 @@ export default function ActivityLogPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  const [activities, setActivities] = useState<ActivityLogResponse['activities']>([])
-  const [admins, setAdmins] = useState<Admin[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [total, setTotal] = useState(0)
-  const [totalPages, setTotalPages] = useState(0)
 
   // Filter state
   const [actionType, setActionType] = useState(searchParams.get('action_type') || 'all')
   const [entityType, setEntityType] = useState(searchParams.get('entity_type') || 'all')
   const [adminId, setAdminId] = useState(searchParams.get('admin_id') || 'all')
-  const [page, setPage] = useState(parseInt(searchParams.get('page') || '1', 10))
   const pageSize = 20
 
-  const fetchActivities = useCallback(async () => {
-    setIsLoading(true)
+  // The admin dropdown is its own query rather than a field on the paginated
+  // one: it is a small fixed list, and folding a whole-table read into a
+  // paginated query would defeat the pagination.
+  const admins = useQuery(api.admin.admins) ?? []
 
-    const params = new URLSearchParams()
-    if (actionType !== 'all') params.set('action_type', actionType)
-    if (entityType !== 'all') params.set('entity_type', entityType)
-    if (adminId !== 'all') params.set('admin_id', adminId)
-    params.set('page', page.toString())
-    params.set('pageSize', pageSize.toString())
+  const { results: activities, status: pageStatus, loadMore } = usePaginatedQuery(
+    api.admin.activityLog,
+    {
+      actionType: actionType === 'all' ? undefined : actionType,
+      entityType: entityType === 'all' ? undefined : entityType,
+      adminId: adminId === 'all' ? undefined : (adminId as Id<'admins'>),
+    },
+    { initialNumItems: pageSize },
+  )
 
-    const res = await fetch(`/api/admin/activity-log?${params.toString()}`)
-    if (res.ok) {
-      const data: ActivityLogResponse = await res.json()
-      setActivities(data.activities)
-      setAdmins(data.admins)
-      setTotal(data.total)
-      setTotalPages(data.totalPages)
-    }
-
-    setIsLoading(false)
-  }, [actionType, entityType, adminId, page])
-
-  useEffect(() => {
-    fetchActivities()
-  }, [fetchActivities])
 
   // Update URL when filters change
   useEffect(() => {
@@ -132,18 +110,13 @@ export default function ActivityLogPage() {
     if (actionType !== 'all') params.set('action_type', actionType)
     if (entityType !== 'all') params.set('entity_type', entityType)
     if (adminId !== 'all') params.set('admin_id', adminId)
-    if (page > 1) params.set('page', page.toString())
 
     const query = params.toString()
     router.replace(`/admin/activity-log${query ? `?${query}` : ''}`, {
       scroll: false,
     })
-  }, [actionType, entityType, adminId, page, router])
+  }, [actionType, entityType, adminId, router])
 
-  // Reset to page 1 when filters change
-  useEffect(() => {
-    setPage(1)
-  }, [actionType, entityType, adminId])
 
   return (
     <div className="space-y-6">
@@ -162,14 +135,6 @@ export default function ActivityLogPage() {
             View all admin actions and changes made to the system
           </p>
         </div>
-        <Button
-          variant="outline"
-          onClick={fetchActivities}
-          disabled={isLoading}
-        >
-          <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-          Refresh
-        </Button>
       </motion.div>
 
       {/* Filters */}
@@ -227,7 +192,7 @@ export default function ActivityLogPage() {
                 <SelectContent>
                   <SelectItem value="all">All Admins</SelectItem>
                   {admins.map((admin) => (
-                    <SelectItem key={admin.id} value={admin.id}>
+                    <SelectItem key={admin._id} value={admin._id}>
                       {admin.name || admin.email}
                     </SelectItem>
                   ))}
@@ -250,15 +215,15 @@ export default function ActivityLogPage() {
               <div>
                 <CardTitle className="text-xl">Recent Activity</CardTitle>
                 <CardDescription>
-                  {isLoading
-                    ? 'Loading...'
-                    : `${total} activit${total !== 1 ? 'ies' : 'y'} found`}
+                  {pageStatus === 'LoadingFirstPage'
+                    ? 'Loading…'
+                    : `${activities.length} activit${activities.length !== 1 ? 'ies' : 'y'} loaded${pageStatus === 'CanLoadMore' ? '+' : ''}`}
                 </CardDescription>
               </div>
             </div>
           </CardHeader>
           <CardContent>
-            {isLoading ? (
+            {pageStatus === 'LoadingFirstPage' ? (
               <div className="space-y-4">
                 {[1, 2, 3, 4, 5].map((i) => (
                   <Skeleton key={i} className="h-20 w-full rounded-lg" />
@@ -270,38 +235,22 @@ export default function ActivityLogPage() {
               <>
                 <div className="space-y-4">
                   {activities.map((activity) => (
-                    <ActivityRow key={activity.id} activity={activity} />
+                    <ActivityRow key={activity._id} activity={activity} />
                   ))}
                 </div>
 
-                {/* Pagination */}
-                {totalPages > 1 && (
-                  <div className="flex items-center justify-between border-t pt-4 mt-4">
-                    <p className="text-sm text-gray-600">
-                      Page {page} of {totalPages}
-                    </p>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setPage((p) => Math.max(1, p - 1))}
-                        disabled={page === 1}
-                      >
-                        <ChevronLeft className="h-4 w-4" />
-                        Previous
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                        disabled={page === totalPages}
-                      >
-                        Next
-                        <ChevronRight className="h-4 w-4" />
-                      </Button>
-                    </div>
+                {pageStatus === 'CanLoadMore' || pageStatus === 'LoadingMore' ? (
+                  <div className="flex justify-center border-t pt-4 mt-4">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => loadMore(pageSize)}
+                      disabled={pageStatus === 'LoadingMore'}
+                    >
+                      {pageStatus === 'LoadingMore' ? 'Loading…' : 'Load more'}
+                    </Button>
                   </div>
-                )}
+                ) : null}
               </>
             )}
           </CardContent>
@@ -314,28 +263,28 @@ export default function ActivityLogPage() {
 function ActivityRow({
   activity,
 }: {
-  activity: AdminActivityLog & { admin: { name: string | null; email: string } }
+  activity: ActivityEntry
 }) {
-  const actionConfig = actionTypeConfig[activity.action_type] || {
-    label: activity.action_type,
+  const actionConfig = actionTypeConfig[activity.actionType] || {
+    label: activity.actionType,
     className: 'bg-gray-100 text-gray-800',
   }
-  const entityConfig = entityTypeConfig[activity.entity_type] || {
-    label: activity.entity_type,
+  const entityConfig = entityTypeConfig[activity.entityType] || {
+    label: activity.entityType,
     basePath: null,
   }
 
   // Parse old/new values
-  const oldValue = activity.old_value as Record<string, unknown> | null
-  const newValue = activity.new_value as Record<string, unknown> | null
+  const oldValue = activity.oldValue as Record<string, unknown> | null
+  const newValue = activity.newValue as Record<string, unknown> | null
 
   // Generate link to entity
-  const entityLink = entityConfig.basePath && activity.entity_id !== 'batch'
-    ? `${entityConfig.basePath}/${activity.entity_id}`
+  const entityLink = entityConfig.basePath && activity.entityId !== 'batch'
+    ? `${entityConfig.basePath}/${activity.entityId}`
     : null
 
   // Format timestamp
-  const timestamp = new Date(activity.created_at!).toLocaleString('en-IN', {
+  const timestamp = new Date(activity._creationTime!).toLocaleString('en-IN', {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
@@ -348,11 +297,11 @@ function ActivityRow({
       <div className="flex items-start gap-4">
         {/* Icon */}
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-100">
-          {activity.action_type === 'status_change' ? (
+          {activity.actionType === 'status_change' ? (
             getStatusIcon(newValue?.status as string)
-          ) : activity.action_type === 'featured_change' ? (
+          ) : activity.actionType === 'featured_change' ? (
             <Star className="h-4 w-4 text-amber-600" />
-          ) : activity.action_type === 'notes_update' ? (
+          ) : activity.actionType === 'notes_update' ? (
             <FileText className="h-4 w-4 text-gray-600" />
           ) : (
             <History className="h-4 w-4 text-gray-600" />
@@ -380,7 +329,7 @@ function ActivityRow({
 
           {/* Description */}
           <div className="mt-2 text-sm text-gray-700">
-            {activity.action_type === 'status_change' && (
+            {activity.actionType === 'status_change' && (
               <p>
                 Changed status from{' '}
                 <code className="bg-gray-100 px-1 rounded">{String(oldValue?.status || 'unknown')}</code>
@@ -388,15 +337,15 @@ function ActivityRow({
                 <code className="bg-gray-100 px-1 rounded">{String(newValue?.status || 'unknown')}</code>
               </p>
             )}
-            {activity.action_type === 'notes_update' && (
+            {activity.actionType === 'notes_update' && (
               <p>Updated reviewer notes</p>
             )}
-            {activity.action_type === 'featured_change' && (
+            {activity.actionType === 'featured_change' && (
               <p>
-                {newValue?.is_featured ? 'Added to' : 'Removed from'} homepage spotlight
+                {newValue?.isFeatured ? 'Added to' : 'Removed from'} homepage spotlight
               </p>
             )}
-            {activity.action_type === 'spotlight_reorder' && (
+            {activity.actionType === 'spotlight_reorder' && (
               <p>Reordered spotlight students</p>
             )}
           </div>

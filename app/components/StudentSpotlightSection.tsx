@@ -1,9 +1,11 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { motion } from "motion/react"
 import Link from "next/link"
 import { ArrowRight } from "lucide-react"
+import { useQuery } from "convex/react"
+import { api } from "@/convex/_generated/api"
 import { Button } from "@/components/ui/button"
 import StudentCard, { type Student } from "./StudentCard"
 import HelpInterestDialog from "./HelpInterestDialog"
@@ -69,35 +71,24 @@ function StudentCardSkeleton() {
 }
 
 export default function StudentSpotlightSection() {
-  const [students, setStudents] = useState<Student[]>([])
-  const [totalCount, setTotalCount] = useState<number | null>(null)
-  const [loading, setLoading] = useState(true)
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
 
-  useEffect(() => {
-    async function fetchFeatured() {
-      try {
-        const response = await fetch('/api/featured-students?limit=3')
-        if (response.ok) {
-          const data = await response.json()
-          if (data.students && data.students.length > 0) {
-            setStudents(data.students)
-            setTotalCount(data.total)
-          } else {
-            setStudents(FALLBACK_STUDENTS)
-          }
-        } else {
-          setStudents(FALLBACK_STUDENTS)
-        }
-      } catch {
-        setStudents(FALLBACK_STUDENTS)
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchFeatured()
-  }, [])
+  // Phase 2a built featured.list for this component, but the conversion was
+  // left undone because the section is currently commented out of the homepage
+  // — so it was the last thing in the app still calling an /api route.
+  //
+  // The useEffect + fetch + setState it replaces is also the pattern the
+  // react-hooks/set-state-in-effect rule flags, so this removes one more of the
+  // warnings blocking that rule's return to "error".
+  const featured = useQuery(api.featured.list, { limit: 3 })
+
+  const loading = featured === undefined
+  // The hard-coded FALLBACK_STUDENTS stand in whenever there is nothing real to
+  // show, which is the current state: no application has been featured yet.
+  const students =
+    featured && featured.students.length > 0 ? featured.students : FALLBACK_STUDENTS
+  const totalCount = featured?.total ?? null
 
   const handleExpressInterest = (student: Student) => {
     setSelectedStudent(student)

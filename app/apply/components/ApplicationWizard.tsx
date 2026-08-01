@@ -1,10 +1,16 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { motion, AnimatePresence } from "motion/react"
-import { useForm, FormProvider } from "react-hook-form"
+import {
+  useForm,
+  FormProvider,
+  type Resolver,
+  type FieldValues,
+} from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
 import { Button } from "@/components/ui/button"
 import {
   ArrowLeft,
@@ -19,9 +25,18 @@ import { StepProgress } from "./StepProgress"
 import {
   type ApplicationType,
   getStepFields,
+  fileFieldToDocumentType,
+  flatApplicationSchema,
 } from "@/lib/schemas/application"
+import { asIncomeBracket, requiredNumber } from "@/lib/formCoercion"
 import { useAuth } from "@/app/context/AuthContext"
-import type { DocumentType } from "@/types/database"
+import { useMutation, useQuery } from "convex/react"
+import { api } from "@/convex/_generated/api"
+import type { Id, Doc } from "@/convex/_generated/dataModel"
+import { convexErrorMessage, convexErrorData } from "@/lib/convexError"
+// Derived from the Convex schema rather than the Supabase row types, so the
+// wizard and the attach mutation cannot disagree about what a document type is.
+type DocumentType = Doc<"applicationDocuments">["documentType"]
 
 import { PersonalInfoStep } from "./steps/PersonalInfoStep"
 import { FamilyBackgroundStep } from "./steps/FamilyBackgroundStep"
@@ -48,70 +63,67 @@ interface ApplicationWizardProps {
   editApplicationType?: ApplicationType
 }
 
-// Field mapping: DB snake_case → form camelCase
-const DB_TO_FORM_MAP: Record<string, string> = {
-  full_name: 'fullName',
-  email: 'email',
-  phone: 'phone',
-  date_of_birth: 'dateOfBirth',
-  gender: 'gender',
-  village: 'village',
-  mandal: 'mandal',
-  district: 'district',
-  pincode: 'pincode',
-  address: 'address',
-  mother_name: 'motherName',
-  father_name: 'fatherName',
-  guardian_name: 'guardianName',
-  guardian_relationship: 'guardianRelationship',
-  mother_occupation: 'motherOccupation',
-  mother_mobile: 'motherMobile',
-  father_occupation: 'fatherOccupation',
-  father_mobile: 'fatherMobile',
-  guardian_details: 'guardianDetails',
-  family_adults_count: 'familyAdultsCount',
-  family_children_count: 'familyChildrenCount',
-  annual_family_income: 'annualFamilyIncome',
-  high_school_studied: 'highSchoolStudied',
-  ssc_total_marks: 'sscTotalMarks',
-  ssc_max_marks: 'sscMaxMarks',
-  ssc_percentage: 'sscPercentage',
-  college_address: 'collegeAddress',
-  group_subjects: 'groupSubjects',
-  college_admitted: 'collegeAdmitted',
-  course_joined: 'courseJoined',
-  date_of_admission: 'dateOfAdmission',
-  current_college: 'currentCollege',
-  course_studying: 'courseStudying',
-  first_year_total_marks: 'firstYearTotalMarks',
-  first_year_max_marks: 'firstYearMaxMarks',
-  first_year_percentage: 'firstYearPercentage',
-  bank_account_number: 'bankAccountNumber',
-  bank_name_branch: 'bankNameBranch',
-  ifsc_code: 'ifscCode',
-  study_activities: 'studyActivities',
-  goals_dreams: 'goalsDreams',
-  additional_info: 'additionalInfo',
-}
+// Convex documents are camelCase, and every form field is named identically to
+// its document field — so what used to be a snake_case→camelCase mapping table
+// is now just the list of fields the edit form repopulates.
+const EDITABLE_FORM_FIELDS = [
+  'fullName', 'email', 'phone', 'dateOfBirth', 'gender', 'village', 'mandal',
+  'district', 'pincode', 'address',
+  'motherName', 'fatherName', 'guardianName', 'guardianRelationship',
+  'motherOccupation', 'motherMobile', 'fatherOccupation', 'fatherMobile',
+  'guardianDetails', 'familyAdultsCount', 'familyChildrenCount',
+  'annualFamilyIncome',
+  'highSchoolStudied', 'sscTotalMarks', 'sscMaxMarks', 'sscPercentage',
+  'collegeAddress', 'groupSubjects',
+  'collegeAdmitted', 'courseJoined', 'dateOfAdmission',
+  'currentCollege', 'courseStudying', 'firstYearTotalMarks',
+  'firstYearMaxMarks', 'firstYearPercentage',
+  'bankAccountNumber', 'bankNameBranch', 'ifscCode',
+  'studyActivities', 'goalsDreams', 'additionalInfo',
+] as const
+
 
 export function ApplicationWizard({ editApplicationId, editApplicationType }: ApplicationWizardProps) {
   const router = useRouter()
   const { user, student, isLoading: authLoading } = useAuth()
-  const [applicationType, setApplicationType] = useState<ApplicationType>(editApplicationType || "first-year")
+  // The type the user picked. In edit mode the loaded application is the
+  // authority instead — see `applicationType` below — so this only drives the
+  // new-application flow, where the two-card selector sets it.
+  const [selectedType, setSelectedType] = useState<ApplicationType>(
+    editApplicationType || "first-year",
+  )
   const [currentStep, setCurrentStep] = useState(0)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSubmitted, setIsSubmitted] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [applicationId, setApplicationId] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
-  const [isLoadingEdit, setIsLoadingEdit] = useState(!!editApplicationId)
-  const [editDbId, setEditDbId] = useState<string | null>(null)
-  const [existingDocuments, setExistingDocuments] = useState<{document_type: string, file_name: string}[]>([])
+
 
   const isEditMode = !!editApplicationId
 
+  // Validation state the resolver needs, held in a ref so the resolver's own
+  // identity can stay stable across renders. useForm captures its options, so a
+  // resolver rebuilt every render is not reliably picked up; one that reads a
+  // ref always sees current values.
+  const validationRef = useRef<{
+    applicationType: ApplicationType
+    exemptFileFields: string[]
+  }>({ applicationType: "first-year", exemptFileFields: [] })
+
+  const resolver = useCallback<Resolver<FieldValues>>(
+    async (values, context, options) => {
+      const { applicationType, exemptFileFields } = validationRef.current
+      return zodResolver(
+        flatApplicationSchema(applicationType, exemptFileFields),
+      )(values, context, options)
+    },
+    [],
+  )
+
   const methods = useForm({
     mode: "onChange",
+    resolver,
     defaultValues: {
       // Personal Info (common)
       fullName: "",
@@ -189,64 +201,102 @@ export function ApplicationWizard({ editApplicationId, editApplicationType }: Ap
 
   const { trigger, getValues, reset, setValue } = methods
 
-  // Fetch existing application data in edit mode
+  const createApplication = useMutation(api.applications.create)
+  const updateApplication = useMutation(api.applications.update)
+  const generateUploadUrl = useMutation(api.documents.generateUploadUrl)
+  const attachApplicationDocument = useMutation(
+    api.documents.attachApplicationDocument,
+  )
+
+  // Existing application, in edit mode. A live query rather than a one-shot
+  // fetch: "skip" when there is nothing to edit, undefined while loading, and
+  // null when the record is missing or belongs to someone else — the query
+  // collapses those two cases on purpose so neither can probe for valid ids.
+  const editApplication = useQuery(
+    api.applications.myApplication,
+    editApplicationId
+      ? { applicationId: editApplicationId as Id<'applications'> }
+      : 'skip',
+  )
+
+  // Derived rather than stored. Each of these is a pure function of the query
+  // result, and holding them in state meant an effect that wrote four setStates
+  // every time the subscription resolved — the cascade
+  // react-hooks/set-state-in-effect exists to catch. The form itself still needs
+  // an effect below, because react-hook-form owns that state, not React.
+  const isLoadingEdit = isEditMode && editApplication === undefined
+  const editDbId = editApplication?._id ?? null
+  const editLoadFailed = isEditMode && editApplication === null
+  const existingDocuments = useMemo(
+    () =>
+      editApplication?.documents.map((d) => ({
+        document_type: d.documentType,
+        file_name: d.fileName,
+        // Carried so the badge can offer a download through the authorized
+        // route; the row id is what convex/http.ts takes.
+        id: d._id,
+      })) ?? [],
+    [editApplication],
+  )
+
+  // Derived, so the edit effect no longer has to write it back into state.
+  // The loaded application wins in edit mode; the prop is only a hint for the
+  // first render, before the query resolves.
+  const applicationType: ApplicationType = isEditMode
+    ? (editApplication?.applicationType ?? editApplicationType ?? "first-year")
+    : selectedType
+
+  // File fields the server already holds, in edit mode. The submit path only
+  // uploads files the student actually re-selected, so a document already on
+  // file satisfies its field — without this a needs_info resubmit would demand
+  // every Aadhaar and bank passbook over again.
+  const exemptFileFields = useMemo(
+    () =>
+      isEditMode
+        ? Object.entries(fileFieldToDocumentType)
+            .filter(([, documentType]) =>
+              existingDocuments.some((doc) => doc.document_type === documentType),
+            )
+            .map(([field]) => field)
+        : [],
+    [isEditMode, existingDocuments],
+  )
+
+  // Written in an effect rather than during render — a ref write during render
+  // is unsafe under concurrent rendering, and react-hooks/refs rejects it. The
+  // resolver only runs on user interaction, which is always after effects have
+  // flushed, so it never reads a stale value. Until the first flush the ref
+  // holds the initial first-year/no-exemptions pair, which is also what a fresh
+  // application starts as.
   useEffect(() => {
-    if (!editApplicationId) return
+    validationRef.current = { applicationType, exemptFileFields }
+  }, [applicationType, exemptFileFields])
 
-    async function fetchEditData() {
-      setIsLoadingEdit(true)
-      try {
-        const res = await fetch(`/api/student/applications/${editApplicationId}`)
-        if (!res.ok) {
-          setSubmitError('Failed to load application for editing')
-          setIsLoadingEdit(false)
-          return
-        }
+  useEffect(() => {
+    if (!editApplication) return
 
-        const data = await res.json()
-        const { documents, ...appData } = data
+    const { ...appData } = editApplication
 
-        // Store the DB id and documents
-        setEditDbId(appData.id)
-        if (documents) {
-          setExistingDocuments(documents.map((d: { document_type: string; file_name: string }) => ({
-            document_type: d.document_type,
-            file_name: d.file_name,
-          })))
-        }
-
-        // Set application type from edit data
-        if (appData.application_type) {
-          setApplicationType(appData.application_type)
-        }
-
-        // Map DB fields to form fields
-        const formData: Record<string, unknown> = {}
-        for (const [dbKey, formKey] of Object.entries(DB_TO_FORM_MAP)) {
-          if (appData[dbKey] !== null && appData[dbKey] !== undefined) {
-            formData[formKey] = appData[dbKey]
-          }
-        }
-
-        reset((prev) => ({ ...prev, ...formData }))
-      } catch {
-        setSubmitError('Failed to load application for editing')
-      } finally {
-        setIsLoadingEdit(false)
-      }
+    // Field names match one-for-one now, so this copies rather than translates.
+    // Absent optional fields are skipped so they keep the form's own defaults
+    // instead of becoming undefined and tripping the controlled-input warning.
+    const formData: Record<string, unknown> = {}
+    for (const field of EDITABLE_FORM_FIELDS) {
+      const value = (appData as Record<string, unknown>)[field]
+      if (value !== undefined && value !== null) formData[field] = value
     }
 
-    fetchEditData()
-  }, [editApplicationId, reset])
+    reset((prev) => ({ ...prev, ...formData }))
+  }, [editApplication, reset])
 
   // Pre-fill form with student profile data (skip in edit mode)
   useEffect(() => {
     if (isEditMode) return
     if (student) {
-      if (student.full_name) setValue('fullName', student.full_name)
+      if (student.fullName) setValue('fullName', student.fullName)
       if (student.email) setValue('email', student.email)
       if (student.phone) setValue('phone', student.phone)
-      if (student.date_of_birth) setValue('dateOfBirth', student.date_of_birth)
+      if (student.dateOfBirth) setValue('dateOfBirth', student.dateOfBirth)
       if (student.gender) setValue('gender', student.gender as any)
       if (student.village) setValue('village', student.village)
       if (student.mandal) setValue('mandal', student.mandal)
@@ -318,7 +368,7 @@ export function ApplicationWizard({ editApplicationId, editApplicationType }: Ap
   const handleTypeChange = (type: ApplicationType) => {
     if (type !== applicationType) {
       saveDraft()
-      setApplicationType(type)
+      setSelectedType(type)
       setCurrentStep(0)
     }
   }
@@ -333,7 +383,13 @@ export function ApplicationWizard({ editApplicationId, editApplicationType }: Ap
       'additionalInfo', 'mangoPlantPhoto'
     ]
 
-    return allFields.filter(field => !optionalFields.includes(field))
+    // Fields already satisfied by a document on the server are dropped here as
+    // well as being made optional in the schema — trigger() should not even ask
+    // about them.
+    return allFields.filter(
+      (field) =>
+        !optionalFields.includes(field) && !exemptFileFields.includes(field),
+    )
   }
 
   const handleNext = async () => {
@@ -372,28 +428,41 @@ export function ApplicationWizard({ editApplicationId, editApplicationType }: Ap
     return `${year - 1}-${year}`
   }
 
-  // Upload a single document
+  // Upload a single document.
+  //
+  // Three steps instead of the old one-shot POST, because Convex uploads go
+  // straight to storage rather than through a route of ours: ask for a
+  // short-lived upload URL, PUT the bytes at it, then record the returned
+  // storageId against the application.
+  //
+  // Type and size are enforced server-side in the attach step, from the
+  // metadata Convex recorded — not from anything sent here — so a client that
+  // misreports either still gets rejected.
   const uploadDocument = async (
-    appId: string,
+    appId: Id<'applications'>,
     file: File,
-    documentType: DocumentType
+    documentType: DocumentType,
   ) => {
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('applicationId', appId)
-    formData.append('documentType', documentType)
+    const uploadUrl = await generateUploadUrl()
 
-    const response = await fetch('/api/upload', {
+    const result = await fetch(uploadUrl, {
       method: 'POST',
-      body: formData,
+      headers: { 'Content-Type': file.type },
+      body: file,
     })
 
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.error || `Failed to upload ${documentType}`)
+    if (!result.ok) {
+      throw new Error(`Failed to upload ${documentType}`)
     }
 
-    return response.json()
+    const { storageId } = (await result.json()) as { storageId: Id<'_storage'> }
+
+    return attachApplicationDocument({
+      applicationId: appId,
+      documentType,
+      storageId,
+      fileName: file.name,
+    })
   }
 
   const handleSubmit = async () => {
@@ -403,14 +472,17 @@ export function ApplicationWizard({ editApplicationId, editApplicationType }: Ap
     try {
       const data = getValues()
 
-      // Prepare application data
-      const applicationData: Record<string, unknown> = {
+      // Field names now match the mutation's arguments exactly, so this is a
+      // direct pass rather than a rename. Empty optionals become undefined, not
+      // null: Convex optional fields are absent-or-present, and null is a
+      // distinct value its validators reject.
+      const applicationData = {
         // Personal info
-        full_name: data.fullName,
+        fullName: data.fullName,
         email: data.email,
         phone: data.phone,
-        date_of_birth: data.dateOfBirth,
-        gender: data.gender || null,
+        dateOfBirth: data.dateOfBirth,
+        gender: data.gender || undefined,
         village: data.village,
         mandal: data.mandal,
         district: data.district,
@@ -418,91 +490,61 @@ export function ApplicationWizard({ editApplicationId, editApplicationType }: Ap
         address: data.address,
 
         // Family info
-        mother_name: data.motherName,
-        father_name: data.fatherName,
-        guardian_name: data.guardianName || null,
-        guardian_relationship: data.guardianRelationship || null,
-        mother_occupation: data.motherOccupation || null,
-        mother_mobile: data.motherMobile || null,
-        father_occupation: data.fatherOccupation || null,
-        father_mobile: data.fatherMobile || null,
-        guardian_details: data.guardianDetails || null,
-        family_adults_count: data.familyAdultsCount || null,
-        family_children_count: data.familyChildrenCount || null,
-        annual_family_income: data.annualFamilyIncome || null,
+        motherName: data.motherName,
+        fatherName: data.fatherName,
+        guardianName: data.guardianName || undefined,
+        guardianRelationship: data.guardianRelationship || undefined,
+        motherOccupation: data.motherOccupation || undefined,
+        motherMobile: data.motherMobile || undefined,
+        fatherOccupation: data.fatherOccupation || undefined,
+        fatherMobile: data.fatherMobile || undefined,
+        guardianDetails: data.guardianDetails || undefined,
+        familyAdultsCount: data.familyAdultsCount || undefined,
+        familyChildrenCount: data.familyChildrenCount || undefined,
+        annualFamilyIncome: asIncomeBracket(data.annualFamilyIncome),
 
         // Education info
-        high_school_studied: data.highSchoolStudied,
-        ssc_total_marks: data.sscTotalMarks,
-        ssc_max_marks: data.sscMaxMarks,
-        ssc_percentage: data.sscPercentage,
-        college_address: data.collegeAddress,
-        group_subjects: data.groupSubjects,
+        highSchoolStudied: data.highSchoolStudied,
+        sscTotalMarks: requiredNumber(data.sscTotalMarks, "SSC total marks"),
+        sscMaxMarks: requiredNumber(data.sscMaxMarks, "SSC maximum marks"),
+        sscPercentage: requiredNumber(data.sscPercentage, "SSC percentage"),
+        collegeAddress: data.collegeAddress,
+        groupSubjects: data.groupSubjects,
 
         // 1st year specific
-        college_admitted: data.collegeAdmitted || null,
-        course_joined: data.courseJoined || null,
-        date_of_admission: data.dateOfAdmission || null,
+        collegeAdmitted: data.collegeAdmitted || undefined,
+        courseJoined: data.courseJoined || undefined,
+        dateOfAdmission: data.dateOfAdmission || undefined,
 
         // 2nd year specific
-        current_college: data.currentCollege || null,
-        course_studying: data.courseStudying || null,
-        first_year_total_marks: data.firstYearTotalMarks || null,
-        first_year_max_marks: data.firstYearMaxMarks || null,
-        first_year_percentage: data.firstYearPercentage || null,
+        currentCollege: data.currentCollege || undefined,
+        courseStudying: data.courseStudying || undefined,
+        firstYearTotalMarks: data.firstYearTotalMarks || undefined,
+        firstYearMaxMarks: data.firstYearMaxMarks || undefined,
+        firstYearPercentage: data.firstYearPercentage || undefined,
 
         // Bank details
-        bank_account_number: data.bankAccountNumber,
-        bank_name_branch: data.bankNameBranch,
-        ifsc_code: data.ifscCode,
+        bankAccountNumber: data.bankAccountNumber,
+        bankNameBranch: data.bankNameBranch,
+        ifscCode: data.ifscCode,
 
         // Essays (2nd year)
-        study_activities: data.studyActivities || null,
-        goals_dreams: data.goalsDreams || null,
-        additional_info: data.additionalInfo || null,
+        studyActivities: data.studyActivities || undefined,
+        goalsDreams: data.goalsDreams || undefined,
+        additionalInfo: data.additionalInfo || undefined,
       }
 
-      let appId: string
-      let appApplicationId: string
+      const result =
+        isEditMode && editDbId
+          ? await updateApplication({ id: editDbId, ...applicationData })
+          : await createApplication({
+              ...applicationData,
+              applicationType,
+              academicYear: getCurrentAcademicYear(),
+            })
 
-      if (isEditMode && editDbId) {
-        // PATCH existing application
-        const response = await fetch(`/api/student/applications/${editDbId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(applicationData),
-        })
-
-        if (!response.ok) {
-          const error = await response.json()
-          throw new Error(error.error || 'Failed to update application')
-        }
-
-        const application = await response.json()
-        appId = application.id
-        appApplicationId = application.application_id
-      } else {
-        // POST new application
-        applicationData.application_type = applicationType
-        applicationData.academic_year = getCurrentAcademicYear()
-
-        const response = await fetch('/api/student/applications', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(applicationData),
-        })
-
-        if (!response.ok) {
-          const error = await response.json()
-          throw new Error(error.error || 'Failed to submit application')
-        }
-
-        const application = await response.json()
-        appId = application.id
-        appApplicationId = application.application_id
-      }
-
-      setApplicationId(appApplicationId)
+      const appId = result.id
+      setApplicationId(result.applicationId)
 
       // Upload documents (only new files where user selected them)
       const documentUploads: Promise<unknown>[] = []
@@ -551,7 +593,19 @@ export function ApplicationWizard({ editApplicationId, editApplicationType }: Ap
       setIsSubmitted(true)
     } catch (error) {
       console.error('Application submission error:', error)
-      setSubmitError(error instanceof Error ? error.message : 'Something went wrong. Please try again.')
+
+      // The duplicate guard carries the id of the application the student
+      // already has, so the message can name it instead of just refusing.
+      const data = convexErrorData(error)
+      if (data?.code === 'DUPLICATE_APPLICATION' && data.existingApplicationId) {
+        setSubmitError(
+          `${data.message} (${data.existingApplicationId}). You can view it from your dashboard.`,
+        )
+      } else {
+        setSubmitError(
+          convexErrorMessage(error, 'Something went wrong. Please try again.'),
+        )
+      }
     } finally {
       setIsSubmitting(false)
     }
@@ -745,7 +799,12 @@ export function ApplicationWizard({ editApplicationId, editApplicationType }: Ap
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.25 }}
               >
-                {currentStep === 0 && <PersonalInfoStep applicationType={applicationType} />}
+                {currentStep === 0 && (
+                  <PersonalInfoStep
+                    applicationType={applicationType}
+                    existingDocuments={existingDocuments}
+                  />
+                )}
                 {currentStep === 1 && <FamilyBackgroundStep applicationType={applicationType} />}
                 {currentStep === 2 && <EducationStep applicationType={applicationType} />}
                 {currentStep === 3 && <BankDetailsStep />}
@@ -768,6 +827,18 @@ export function ApplicationWizard({ editApplicationId, editApplicationType }: Ap
         </div>
 
         {/* Error Display */}
+        {editLoadFailed && (
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-red-600">
+                This application could not be loaded for editing. It may have been
+                removed, or it belongs to a different account.
+              </p>
+            </div>
+          </div>
+        )}
+
         {submitError && (
           <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />

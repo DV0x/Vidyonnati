@@ -197,7 +197,7 @@ export default function MainNavigation() {
                         <User className="w-4 h-4 text-primary" />
                       </div>
                       <span className="hidden xl:inline text-sm font-medium">
-                        {student?.full_name || user.email?.split("@")[0]}
+                        {student?.fullName || user.email?.split("@")[0]}
                       </span>
                     </Button>
                   </DropdownMenuTrigger>
@@ -326,7 +326,7 @@ export default function MainNavigation() {
                       </div>
                       <div>
                         <p className="font-medium text-gray-900">
-                          {student?.full_name || "Student"}
+                          {student?.fullName || "Student"}
                         </p>
                         <p className="text-sm text-gray-500">{user.email}</p>
                       </div>

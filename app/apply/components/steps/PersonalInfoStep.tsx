@@ -12,12 +12,22 @@ import {
 } from "@/components/ui/select"
 import { genderOptions, ApplicationType } from "@/lib/schemas/application"
 import { Camera } from "lucide-react"
+import {
+  ExistingPhotoPreview,
+  type ExistingDocument,
+} from "@/app/components/ExistingDocuments"
 
 interface PersonalInfoStepProps {
   applicationType: ApplicationType
+  // The photo upload lives on this step rather than the Documents step, so this
+  // is where an already-uploaded photo has to be surfaced in edit mode.
+  existingDocuments?: ExistingDocument[]
 }
 
-export function PersonalInfoStep({ applicationType }: PersonalInfoStepProps) {
+export function PersonalInfoStep({
+  applicationType,
+  existingDocuments = [],
+}: PersonalInfoStepProps) {
   const { register, setValue, watch, formState: { errors } } = useFormContext()
 
   const gender = watch("gender")
@@ -42,6 +52,12 @@ export function PersonalInfoStep({ applicationType }: PersonalInfoStepProps) {
             onChange={(file) => setValue("studentPhoto", file, { shouldValidate: true })}
             error={errors.studentPhoto?.message as string}
             description="Clear, recent passport-size photo (max 2MB)"
+          />
+          <ExistingPhotoPreview
+            kind="application"
+            doc={existingDocuments.find(
+              (doc) => doc.document_type === "student_photo",
+            )}
           />
         </div>
         <p className="text-xs text-gray-500 mt-2 text-center">

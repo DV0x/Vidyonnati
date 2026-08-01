@@ -46,3 +46,17 @@ next-env.d.ts
 # Test documents
 test-documents/
 scripts/generate-test-docs.mjs
+
+# Editor / tooling scratch
+.history/
+.playwright-mcp/
+
+# Per-machine Claude Code permission grants. The shared skills under
+# .claude/skills are committed; this file is local state.
+.claude/settings.local.json
+
+# Redundant skill copy written by `npx convex ai-files install`.
+# Claude Code reads .claude/skills (content matches .agents/skills), so this
+# third copy is unused. Regenerate with the installer if another agent needs it.
+agent/
+.env*

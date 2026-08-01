@@ -1,16 +1,23 @@
 import "./globals.css"
 import "./styles/grid-pattern.css"
 import { Overpass } from "next/font/google"
+import { ClerkProvider } from "@clerk/nextjs"
+import { ConvexClientProvider } from "./ConvexClientProvider"
 import LayoutWrapper from "./components/LayoutWrapper"
 import { DonorProvider } from "./context/DonorContext"
 import { AuthProvider } from "./context/AuthContext"
 import { Toaster } from "@/components/ui/toaster"
+// The app has two toast systems: the shadcn/useToast one above, and sonner.
+// Only the first was ever mounted, so every `toast.*` call from sonner — the
+// admin save confirmations, the review errors, the profile page — resolved to
+// nothing at all. Mounting both keeps the existing call sites working rather
+// than rewriting six files onto one system mid-migration.
+import { Toaster as SonnerToaster } from "@/components/ui/sonner"
 import type React from "react"
 import type { Metadata } from "next"
+import { SITE_URL as siteUrl } from "@/lib/site"
 
 const overpass = Overpass({ subsets: ["latin"] })
-
-const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "https://vidyonnatifoundation.org"
 
 export const metadata: Metadata = {
   title: {
@@ -82,12 +89,23 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={overpass.className}>
-        <AuthProvider>
-          <DonorProvider>
-            <LayoutWrapper>{children}</LayoutWrapper>
-          </DonorProvider>
-        </AuthProvider>
+        {/* ClerkProvider supplies identity; ConvexClientProvider forwards the
+            Clerk JWT to Convex, so it must sit inside ClerkProvider.
+            AuthProvider gates on useConvexAuth() rather than Clerk's own state,
+            because Clerk reports signed-in before Convex has validated the
+            token — gating on Clerk alone fires queries that arrive
+            unauthenticated. */}
+        <ClerkProvider>
+          <ConvexClientProvider>
+            <AuthProvider>
+              <DonorProvider>
+                <LayoutWrapper>{children}</LayoutWrapper>
+              </DonorProvider>
+            </AuthProvider>
+          </ConvexClientProvider>
+        </ClerkProvider>
         <Toaster />
+        <SonnerToaster />
       </body>
     </html>
   )

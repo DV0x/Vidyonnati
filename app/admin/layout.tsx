@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
+import { useQuery } from 'convex/react'
+import { api } from '@/convex/_generated/api'
 import { useAuth } from '@/app/context/AuthContext'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -41,26 +43,12 @@ export default function AdminLayout({
   const router = useRouter()
   const pathname = usePathname()
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [adminInfo, setAdminInfo] = useState<{ name: string | null; role: string | null } | null>(null)
-
-  // Fetch additional admin info (name, role) once we know user is admin
-  useEffect(() => {
-    async function fetchAdminInfo() {
-      try {
-        const res = await fetch('/api/admin/info')
-        if (res.ok) {
-          const admin = await res.json()
-          setAdminInfo(admin)
-        }
-      } catch {
-        // Silently fail - fallback to email display
-      }
-    }
-
-    if (!authLoading && isAdmin) {
-      fetchAdminInfo()
-    }
-  }, [isAdmin, authLoading])
+  // users.me already carries the admin's name and role — the old
+  // /api/admin/info round-trip was reading what this query returns. AuthContext
+  // holds the same subscription, and the Convex client dedupes identical
+  // query+args into one, so reading it here costs nothing extra.
+  const me = useQuery(api.users.me, isAdmin ? {} : 'skip')
+  const adminInfo = me?.isAdmin ? me.admin : null
 
   // Handle redirects
   useEffect(() => {
