@@ -69,11 +69,31 @@ The chain standing between here and a production Google sign-in:
 | 2 | Set `CLERK_JWT_ISSUER_DOMAIN` on it to the **production** Clerk issuer (`clerk.vidyonnatifoundation.org`), not the dev one | ✅ set, plus `ALLOWED_WEB_ORIGINS` |
 | 3 | Seed the `hello@vidyonnatifoundation.org` admin row there (prod starts empty) | ✅ seeded, **unbound** — see below |
 | 4 | Set Vercel env vars | ✅ **all 5 set** (Production scope), build command in `vercel.json` |
-| 5 | Deploy — **Convex functions before the frontend**, per CLAUDE.md | ⬜ Convex side ✅ done; frontend ships on merge to `main` |
-| 6 | Actually sign in with Google on production | ⬜ |
+| 5 | Deploy — **Convex functions before the frontend**, per CLAUDE.md | ✅ **live** — merged and deployed, see below |
+| 6 | Actually sign in with Google on production | ⬜ **the only step left** |
 
-**Steps 1–4 are done. The merge is step 5**, and it is the first thing in this
-whole migration that changes what the public sees.
+### Step 5 landed: the migration is in production
+
+`convex-migration` was pushed to `origin`, merged into `main` with `--no-ff`
+(merge commit `9a42650`, so the whole migration is one revert point), and
+deployed. Build **Ready in 1m**.
+
+`npx convex deploy` ran inside the Vercel build with the `deployment:deploy`-only
+key and succeeded — that least-privilege scoping is now **verified, not
+assumed**.
+
+Checked against the live site, not inferred:
+
+| Check | Result |
+|---|---|
+| `https://vidyonnatifoundation.org` | 200 |
+| `/about` `<title>` | `About Us \| Vidyonnati Foundation` — the per-page metadata from Phase 2b, so the Server Component shells are live |
+| `/api/donations` | 404 — the Supabase routes are genuinely gone from production |
+| `/dashboard` | 307 → `/login?redirect=%2Fdashboard` |
+
+**Nobody has signed in on production yet.** The `admins` row is still unbound,
+and the Google OAuth client is still unexercised — step 6 discharges both at
+once.
 
 ### Step 3: the prod admin row — seeded, and deliberately unbound
 
@@ -1072,26 +1092,48 @@ a build ever fails naming a missing scope, add that one box — do not escalate.
 — but **`NEXT_PUBLIC_CONVEX_SITE_URL` is a variable this project invented in
 Phase 4 and nothing injects it.** It is set explicitly above for that reason.
 
-### Preview deployments are broken, and were before this
+### Preview deployments are broken — and the reason is the build command
 
-**Preview scope has only the three `SUPABASE_*` vars and `NEXT_PUBLIC_APP_URL`**
-— no Convex URL, no Clerk keys. `app/ConvexClientProvider.tsx:17` constructs
-`new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!)` at **module scope**,
-and the root layout wraps every page in that provider, so prerendering any
-static page throws when the variable is absent.
+**Corrected after observing a real failure.** An earlier revision of this section
+claimed previews would fail regardless of the build command, because
+`app/ConvexClientProvider.tsx:17` constructs
+`new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!)` at module scope and
+Preview scope has no Convex vars. **That was reasoning, not observation, and the
+observation says otherwise.**
 
-That means preview builds fail after the merge **whatever the build command
-is** — the build command was not the cause and changing it is not the fix. This
-was checked rather than assumed (`vercel env ls preview`).
+Pushing `convex-migration` triggered a preview build (commit `5f46e9e`). Its log:
 
-Making previews work is its own piece of work, not a cutover step: Preview-scoped
-`NEXT_PUBLIC_CONVEX_URL` / `NEXT_PUBLIC_CONVEX_SITE_URL` / Clerk keys, plus a
-Convex **preview** deploy key (configured at project level, not on a single
-deployment — this one is scoped to `amicable-narwhal-186`).
+```
+Running "npx convex deploy --cmd 'npm run build'"
+✖ Vercel build environment detected but no Convex deployment configuration found.
+• CONVEX_DEPLOY_KEY for Convex Cloud deployments
+Error: Command "npx convex deploy --cmd 'npm run build'" exited with 1
+```
 
-**Practical consequence for the merge:** merging via a pull request will show a
-failed preview check. Merging by pushing `main` directly will not, because no
-preview is built.
+It died in **0.7 seconds**, at `convex deploy`, before `npm run build` ever ran.
+So:
+
+- The build command **is** the proximate cause. `CONVEX_DEPLOY_KEY` is
+  Production-scoped, and `convex deploy` refuses to run without it.
+- The module-scope `ConvexReactClient` theory was never reached. It may still be
+  a *second* failure waiting behind the first — the Preview scope genuinely has
+  no Convex or Clerk vars (`vercel env ls preview`) — but that is **untested**.
+
+Fixing previews therefore needs the deploy step handled *first*, and then very
+likely the env vars too:
+
+1. A Convex **preview** deploy key on Preview scope (configured at project level,
+   not per-deployment — the existing key is scoped to `amicable-narwhal-186`), or
+   a conditional build command that falls back to plain `npm run build` when
+   `CONVEX_DEPLOY_KEY` is absent.
+2. Then Preview-scoped `NEXT_PUBLIC_CONVEX_URL`, `NEXT_PUBLIC_CONVEX_SITE_URL`
+   and the Clerk keys — expect the module-scope constructor to fail next
+   otherwise.
+
+Not a cutover step; production is unaffected either way.
+
+**Practical consequence:** opening a pull request will show a failed preview
+check until this is fixed. Pushing `main` directly does not build a preview.
 - **No test suite.** Real gap for a system holding bank details; deliberately
   out of scope during the migration.
 
