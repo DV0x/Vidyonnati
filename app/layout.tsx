@@ -7,6 +7,12 @@ import LayoutWrapper from "./components/LayoutWrapper"
 import { DonorProvider } from "./context/DonorContext"
 import { AuthProvider } from "./context/AuthContext"
 import { Toaster } from "@/components/ui/toaster"
+// The app has two toast systems: the shadcn/useToast one above, and sonner.
+// Only the first was ever mounted, so every `toast.*` call from sonner — the
+// admin save confirmations, the review errors, the profile page — resolved to
+// nothing at all. Mounting both keeps the existing call sites working rather
+// than rewriting six files onto one system mid-migration.
+import { Toaster as SonnerToaster } from "@/components/ui/sonner"
 import type React from "react"
 import type { Metadata } from "next"
 import { SITE_URL as siteUrl } from "@/lib/site"
@@ -99,6 +105,7 @@ export default function RootLayout({
           </ConvexClientProvider>
         </ClerkProvider>
         <Toaster />
+        <SonnerToaster />
       </body>
     </html>
   )
