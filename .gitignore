@@ -59,3 +59,4 @@ scripts/generate-test-docs.mjs
 # Claude Code reads .claude/skills (content matches .agents/skills), so this
 # third copy is unused. Regenerate with the installer if another agent needs it.
 agent/
+.env*

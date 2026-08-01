@@ -68,7 +68,7 @@ The chain standing between here and a production Google sign-in:
 | 1 | Create the **production Convex deployment** | ✅ `amicable-narwhal-186` |
 | 2 | Set `CLERK_JWT_ISSUER_DOMAIN` on it to the **production** Clerk issuer (`clerk.vidyonnatifoundation.org`), not the dev one | ✅ set, plus `ALLOWED_WEB_ORIGINS` |
 | 3 | Seed the `hello@vidyonnatifoundation.org` admin row there (prod starts empty) | ✅ seeded, **unbound** — see below |
-| 4 | Set Vercel env vars: `pk_live`/`sk_live`, prod `NEXT_PUBLIC_CONVEX_URL`, prod `NEXT_PUBLIC_CONVEX_SITE_URL`, `CONVEX_DEPLOY_KEY` | ❌ **none set — the only thing left** |
+| 4 | Set Vercel env vars | ⬜ **4 of 5 set** — only `CONVEX_DEPLOY_KEY` left, plus the build-command decision |
 | 5 | Deploy — **Convex functions before the frontend**, per CLAUDE.md | ⬜ Convex side ✅ done; frontend not deployed |
 | 6 | Actually sign in with Google on production | ⬜ |
 
@@ -1017,42 +1017,62 @@ job deliberately rather than reflexively.
   `CONVEX_DEPLOY_KEY`. The full list, with the one that is *not* auto-injected
   called out, is in the Vercel section below.
 
-## Vercel configuration (still to do)
+## Vercel configuration
 
-Five variables, all on **Production** scope. Nothing here is set yet.
+The repo is now **linked locally** (`vercel link`, project
+`alphasapien17-gmailcoms-projects/vidyonnati`), so `vercel env` works from here.
+That also appended `VERCEL_OIDC_TOKEN` to `.env.local` and added a redundant
+`.env*` line to `.gitignore` — both harmless, neither reverted.
 
-| Variable | Value | Where it comes from |
+| Variable | Value | State |
 |---|---|---|
-| `NEXT_PUBLIC_CONVEX_URL` | `https://amicable-narwhal-186.convex.cloud` | Convex prod deployment |
-| `NEXT_PUBLIC_CONVEX_SITE_URL` | `https://amicable-narwhal-186.convex.site` | same deployment, `.site` host |
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | `pk_live_…` | Clerk **production** dashboard |
-| `CLERK_SECRET_KEY` | `sk_live_…` | Clerk **production** dashboard |
-| `CONVEX_DEPLOY_KEY` | a prod deploy key | Convex dashboard → Settings → Deploy keys |
+| `NEXT_PUBLIC_CONVEX_URL` | `https://amicable-narwhal-186.convex.cloud` | ✅ set (Production) |
+| `NEXT_PUBLIC_CONVEX_SITE_URL` | `https://amicable-narwhal-186.convex.site` | ✅ set (Production) |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | `pk_live_…` (decodes to `clerk.vidyonnatifoundation.org$`) | ✅ set (Production) |
+| `CLERK_SECRET_KEY` | `sk_live_…` | ✅ set (Production, sensitive) |
+| `CONVEX_DEPLOY_KEY` | a prod deploy key | ❌ **not set** — no CLI command mints one; dashboard only |
 
-Those five are the whole list. The app reads only `NEXT_PUBLIC_CONVEX_URL` and
-`NEXT_PUBLIC_CONVEX_SITE_URL` directly; the two Clerk keys are read by
-`@clerk/nextjs` itself. **`NEXT_PUBLIC_APP_URL` is not needed** — it survives
-only in a comment in `lib/site.ts` explaining why the canonical origin is a
-constant instead. Setting it would do nothing.
+The app reads only `NEXT_PUBLIC_CONVEX_URL` and `NEXT_PUBLIC_CONVEX_SITE_URL`
+directly; the two Clerk keys are read by `@clerk/nextjs` itself.
+**`NEXT_PUBLIC_APP_URL` is not needed** by the new code — it survives only in a
+comment in `lib/site.ts`. It is still set on Vercel across all environments
+because the *old* Supabase app on `main` reads it; leave it, along with the
+three `SUPABASE_*` vars, until that rollback path is retired.
 
-### The build command, and why it matters
+> 🔑 The `sk_live_` key was pasted into a chat transcript during session 5.
+> **Rotate it.** Clerk supports multiple secret keys, so a new one can be issued
+> and the old revoked without downtime.
 
-Set the Vercel build command to:
+### The build command — and the preview-deployment trap
+
+The intended setting is:
 
 ```
 npx convex deploy --cmd 'npm run build'
 ```
 
-This is what mechanically enforces CLAUDE.md's "deploy Convex functions before
-the frontend" rule: `convex deploy` pushes functions and only then runs the
-build, and if the push fails the build never runs. `CONVEX_DEPLOY_KEY` is what
-tells it which deployment to target.
+This mechanically enforces CLAUDE.md's "deploy Convex functions before the
+frontend" rule: `convex deploy` pushes functions and only then runs the build,
+so a failed push means no frontend ships.
 
-⚠️ **`--cmd` injects `NEXT_PUBLIC_CONVEX_URL` automatically** (verified in
+⚠️ **But a Vercel build command applies to every environment, and
+`CONVEX_DEPLOY_KEY` is Production-scoped.** Set the build command with no key on
+Preview and **every preview build fails** — `convex deploy` has no deployment to
+target. Three ways out, unresolved as of session 5:
+
+1. **Also create a Convex _preview_ deploy key** and set `CONVEX_DEPLOY_KEY` on
+   Preview scope. Convex spins up a throwaway preview deployment per branch.
+   The most correct answer if previews are used at all.
+2. **Leave the build command as `npm run build`** and run `npx convex deploy`
+   by hand before each merge. Works — functions are already deployed and
+   current — but it puts the CLAUDE.md ordering rule back on human memory,
+   which is exactly what it exists to avoid.
+3. Accept broken previews.
+
+⚠️ Also: `--cmd` injects `NEXT_PUBLIC_CONVEX_URL` automatically (verified via
 `npx convex deploy --help`: `--cmd-url-env-var-name`, auto-detected for Next.js)
 — but **`NEXT_PUBLIC_CONVEX_SITE_URL` is a variable this project invented in
-Phase 4 and nothing injects it.** Set it by hand or every private-document
-download on production fails.
+Phase 4 and nothing injects it.** It is set explicitly above for that reason.
 - **No test suite.** Real gap for a system holding bank details; deliberately
   out of scope during the migration.
 
