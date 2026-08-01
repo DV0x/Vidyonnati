@@ -1,10 +1,16 @@
 "use client"
 
-import { useState, useEffect, useCallback, useMemo } from "react"
+import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { motion, AnimatePresence } from "motion/react"
-import { useForm, FormProvider } from "react-hook-form"
+import {
+  useForm,
+  FormProvider,
+  type Resolver,
+  type FieldValues,
+} from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
 import { Button } from "@/components/ui/button"
 import {
   ArrowLeft,
@@ -15,7 +21,11 @@ import {
   AlertCircle,
 } from "lucide-react"
 import { SpotlightStepProgress } from "./SpotlightStepProgress"
-import { getSpotlightStepFields } from "@/lib/schemas/spotlight"
+import {
+  getSpotlightStepFields,
+  fileFieldToDocumentType,
+  flatSpotlightSchema,
+} from "@/lib/schemas/spotlight"
 import {
   asIncomeBracket,
   requiredNumber,
@@ -87,8 +97,25 @@ export function SpotlightWizard({ editApplicationId }: SpotlightWizardProps) {
   const [submitError, setSubmitError] = useState<string | null>(null)
   const isEditMode = !!editApplicationId
 
+  // See the equivalent block in ApplicationWizard: the ref keeps the resolver's
+  // identity stable while still letting it see current exemptions.
+  const validationRef = useRef<{ exemptFileFields: string[] }>({
+    exemptFileFields: [],
+  })
+
+  const resolver = useCallback<Resolver<FieldValues>>(
+    async (values, context, options) =>
+      zodResolver(flatSpotlightSchema(validationRef.current.exemptFileFields))(
+        values,
+        context,
+        options,
+      ),
+    [],
+  )
+
   const methods = useForm({
     mode: "onChange",
+    resolver,
     defaultValues: {
       // Personal Info
       fullName: "",
@@ -173,9 +200,30 @@ export function SpotlightWizard({ editApplicationId }: SpotlightWizardProps) {
       editApplication?.documents.map((d) => ({
         document_type: d.documentType,
         file_name: d.fileName,
+        // Carried so the badge can offer a download through the authorized
+        // route; the row id is what convex/http.ts takes.
+        id: d._id,
       })) ?? [],
     [editApplication],
   )
+
+  // File fields the server already holds — see ApplicationWizard.
+  const exemptFileFields = useMemo(
+    () =>
+      isEditMode
+        ? Object.entries(fileFieldToDocumentType)
+            .filter(([, documentType]) =>
+              existingDocuments.some((doc) => doc.document_type === documentType),
+            )
+            .map(([field]) => field)
+        : [],
+    [isEditMode, existingDocuments],
+  )
+
+  // In an effect, not during render — see the note in ApplicationWizard.
+  useEffect(() => {
+    validationRef.current = { exemptFileFields }
+  }, [exemptFileFields])
 
   useEffect(() => {
     if (!editApplication) return
@@ -285,7 +333,14 @@ export function SpotlightWizard({ editApplicationId }: SpotlightWizardProps) {
       "otherDocuments",
     ]
 
-    return allFields.filter((field) => !optionalFields.includes(field))
+    // A document already on the server satisfies its field — see the matching
+    // block in ApplicationWizard. Without it the photo on step 0 blocks the
+    // resubmit before the student reaches anything else, including the "your
+    // photo is already on file" note on the documents step.
+    return allFields.filter(
+      (field) =>
+        !optionalFields.includes(field) && !exemptFileFields.includes(field),
+    )
   }
 
   const handleNext = async () => {
@@ -664,7 +719,9 @@ export function SpotlightWizard({ editApplicationId }: SpotlightWizardProps) {
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.25 }}
               >
-                {currentStep === 0 && <PersonalInfoStep />}
+                {currentStep === 0 && (
+                  <PersonalInfoStep existingDocuments={existingDocuments} />
+                )}
                 {currentStep === 1 && <EducationStep />}
                 {currentStep === 2 && <CompetitiveExamsStep />}
                 {currentStep === 3 && <FamilyBackgroundStep />}

@@ -403,6 +403,77 @@ export function getStepSchema(step: number, applicationType: ApplicationType) {
 }
 
 // ============================================
+// Flat schema for the wizard resolver
+// ============================================
+//
+// The combined schemas above are NESTED (personalInfo: {...}, family: {...})
+// while react-hook-form holds the fields flat, so they cannot be handed to a
+// resolver as they stand. This merges the same per-step schemas into the shape
+// the form actually has.
+//
+// Until session 4 neither wizard had a resolver at all — every schema in this
+// file was defined and never executed. trigger() therefore returned true
+// unconditionally, so a student could walk from step 0 to Review with an
+// entirely empty form and submit it. Convex validates types, not completeness,
+// so `v.string()` accepted every empty string.
+export function flatApplicationSchema(
+  applicationType: ApplicationType,
+  // File fields already on the server, in edit mode. The submit path only ever
+  // uploads files the student re-selected, so a document already on file
+  // satisfies its field — without this a needs_info resubmit would demand every
+  // Aadhaar and bank passbook over again.
+  exemptFileFields: readonly string[] = [],
+) {
+  const schema =
+    applicationType === 'first-year'
+      ? firstYearPersonalInfoSchema
+          .merge(firstYearFamilySchema)
+          .merge(firstYearEducationSchema)
+          .merge(bankDetailsSchema)
+          .merge(firstYearDocumentsSchema)
+      : secondYearPersonalInfoSchema
+          .merge(secondYearFamilySchema)
+          .merge(secondYearEducationSchema)
+          .merge(bankDetailsSchema)
+          .merge(secondYearDocumentsSchema)
+          .merge(secondYearStatementSchema)
+
+  if (exemptFileFields.length === 0) return schema
+
+  // Redefined as optional rather than stripped, so the field still round-trips
+  // through the form if the student does pick a replacement.
+  return schema.extend(
+    Object.fromEntries(
+      exemptFileFields.map((field) => [field, z.any().optional()]),
+    ),
+  )
+}
+
+// ============================================
+// File fields → applicationDocuments.documentType
+// ============================================
+//
+// Every file field is validated as `instanceof File`, which is right when
+// applying and wrong when editing: a document already on the server is a row,
+// not a File, so edit mode would demand the student re-upload their Aadhaar and
+// bank passbook just to resubmit after a needs_info request.
+//
+// The submit path has always uploaded only the files the student actually
+// re-selected, and DocumentsStep has always shown an "already uploaded" badge —
+// the per-step validation was simply never taught the same thing. This map is
+// what lets it be, in getRequiredFieldsForStep.
+export const fileFieldToDocumentType: Record<string, string> = {
+  studentPhoto: 'student_photo',
+  sscMarksheet: 'ssc_marksheet',
+  aadharStudent: 'aadhar_student',
+  aadharParent: 'aadhar_parent',
+  bonafideCertificate: 'bonafide_certificate',
+  bankPassbook: 'bank_passbook',
+  firstYearMarksheet: 'first_year_marksheet',
+  mangoPlantPhoto: 'mango_plant_photo',
+}
+
+// ============================================
 // Step field names for validation
 // ============================================
 export const firstYearStepFields: Record<number, string[]> = {

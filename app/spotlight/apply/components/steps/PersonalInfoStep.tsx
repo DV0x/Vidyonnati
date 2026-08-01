@@ -12,8 +12,18 @@ import {
 } from "@/components/ui/select"
 import { genderOptions } from "@/lib/schemas/spotlight"
 import { Camera } from "lucide-react"
+import {
+  ExistingPhotoPreview,
+  type ExistingDocument,
+} from "@/app/components/ExistingDocuments"
 
-export function PersonalInfoStep() {
+// The photo upload lives on this step, not the Documents step — which is what
+// the "go back to the first step to replace it" note there refers to.
+export function PersonalInfoStep({
+  existingDocuments = [],
+}: {
+  existingDocuments?: ExistingDocument[]
+}) {
   const {
     register,
     setValue,
@@ -42,6 +52,10 @@ export function PersonalInfoStep() {
             onChange={(file) => setValue("photo", file, { shouldValidate: true })}
             error={errors.photo?.message as string}
             description="Clear, recent photo (max 2MB)"
+          />
+          <ExistingPhotoPreview
+            kind="spotlight"
+            doc={existingDocuments.find((doc) => doc.document_type === "photo")}
           />
         </div>
         <p className="text-xs text-gray-500 mt-2 text-center">

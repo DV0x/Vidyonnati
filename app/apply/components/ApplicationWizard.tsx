@@ -1,10 +1,16 @@
 "use client"
 
-import { useState, useEffect, useCallback, useMemo } from "react"
+import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { motion, AnimatePresence } from "motion/react"
-import { useForm, FormProvider } from "react-hook-form"
+import {
+  useForm,
+  FormProvider,
+  type Resolver,
+  type FieldValues,
+} from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
 import { Button } from "@/components/ui/button"
 import {
   ArrowLeft,
@@ -19,6 +25,8 @@ import { StepProgress } from "./StepProgress"
 import {
   type ApplicationType,
   getStepFields,
+  fileFieldToDocumentType,
+  flatApplicationSchema,
 } from "@/lib/schemas/application"
 import { asIncomeBracket, requiredNumber } from "@/lib/formCoercion"
 import { useAuth } from "@/app/context/AuthContext"
@@ -94,8 +102,28 @@ export function ApplicationWizard({ editApplicationId, editApplicationType }: Ap
 
   const isEditMode = !!editApplicationId
 
+  // Validation state the resolver needs, held in a ref so the resolver's own
+  // identity can stay stable across renders. useForm captures its options, so a
+  // resolver rebuilt every render is not reliably picked up; one that reads a
+  // ref always sees current values.
+  const validationRef = useRef<{
+    applicationType: ApplicationType
+    exemptFileFields: string[]
+  }>({ applicationType: "first-year", exemptFileFields: [] })
+
+  const resolver = useCallback<Resolver<FieldValues>>(
+    async (values, context, options) => {
+      const { applicationType, exemptFileFields } = validationRef.current
+      return zodResolver(
+        flatApplicationSchema(applicationType, exemptFileFields),
+      )(values, context, options)
+    },
+    [],
+  )
+
   const methods = useForm({
     mode: "onChange",
+    resolver,
     defaultValues: {
       // Personal Info (common)
       fullName: "",
@@ -204,6 +232,9 @@ export function ApplicationWizard({ editApplicationId, editApplicationType }: Ap
       editApplication?.documents.map((d) => ({
         document_type: d.documentType,
         file_name: d.fileName,
+        // Carried so the badge can offer a download through the authorized
+        // route; the row id is what convex/http.ts takes.
+        id: d._id,
       })) ?? [],
     [editApplication],
   )
@@ -214,6 +245,32 @@ export function ApplicationWizard({ editApplicationId, editApplicationType }: Ap
   const applicationType: ApplicationType = isEditMode
     ? (editApplication?.applicationType ?? editApplicationType ?? "first-year")
     : selectedType
+
+  // File fields the server already holds, in edit mode. The submit path only
+  // uploads files the student actually re-selected, so a document already on
+  // file satisfies its field — without this a needs_info resubmit would demand
+  // every Aadhaar and bank passbook over again.
+  const exemptFileFields = useMemo(
+    () =>
+      isEditMode
+        ? Object.entries(fileFieldToDocumentType)
+            .filter(([, documentType]) =>
+              existingDocuments.some((doc) => doc.document_type === documentType),
+            )
+            .map(([field]) => field)
+        : [],
+    [isEditMode, existingDocuments],
+  )
+
+  // Written in an effect rather than during render — a ref write during render
+  // is unsafe under concurrent rendering, and react-hooks/refs rejects it. The
+  // resolver only runs on user interaction, which is always after effects have
+  // flushed, so it never reads a stale value. Until the first flush the ref
+  // holds the initial first-year/no-exemptions pair, which is also what a fresh
+  // application starts as.
+  useEffect(() => {
+    validationRef.current = { applicationType, exemptFileFields }
+  }, [applicationType, exemptFileFields])
 
   useEffect(() => {
     if (!editApplication) return
@@ -326,7 +383,13 @@ export function ApplicationWizard({ editApplicationId, editApplicationType }: Ap
       'additionalInfo', 'mangoPlantPhoto'
     ]
 
-    return allFields.filter(field => !optionalFields.includes(field))
+    // Fields already satisfied by a document on the server are dropped here as
+    // well as being made optional in the schema — trigger() should not even ask
+    // about them.
+    return allFields.filter(
+      (field) =>
+        !optionalFields.includes(field) && !exemptFileFields.includes(field),
+    )
   }
 
   const handleNext = async () => {
@@ -736,7 +799,12 @@ export function ApplicationWizard({ editApplicationId, editApplicationType }: Ap
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.25 }}
               >
-                {currentStep === 0 && <PersonalInfoStep applicationType={applicationType} />}
+                {currentStep === 0 && (
+                  <PersonalInfoStep
+                    applicationType={applicationType}
+                    existingDocuments={existingDocuments}
+                  />
+                )}
                 {currentStep === 1 && <FamilyBackgroundStep applicationType={applicationType} />}
                 {currentStep === 2 && <EducationStep applicationType={applicationType} />}
                 {currentStep === 3 && <BankDetailsStep />}

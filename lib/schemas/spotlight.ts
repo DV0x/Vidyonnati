@@ -281,6 +281,39 @@ export const spotlightDocumentsSchema = z.object({
 // ============================================
 // Step Fields Mapping for Validation
 // ============================================
+// Flat schema for the wizard resolver — see the note on the scholarship side.
+// The spotlight steps were never validated either.
+export function flatSpotlightSchema(exemptFileFields: readonly string[] = []) {
+  const schema = spotlightPersonalInfoSchema
+    .merge(spotlightEducationSchema)
+    .merge(spotlightCompetitiveExamsSchema)
+    .merge(spotlightCircumstancesSchema)
+    .merge(spotlightStorySchema)
+    .merge(spotlightDocumentsSchema)
+
+  if (exemptFileFields.length === 0) return schema
+
+  return schema.extend(
+    Object.fromEntries(
+      exemptFileFields.map((field) => [field, z.any().optional()]),
+    ),
+  )
+}
+
+// File fields → spotlightDocuments.documentType. See the note on the same map
+// in application.ts: without it, edit mode makes a student re-upload documents
+// the server already holds.
+//
+// otherDocuments is deliberately absent — it is an array and appends rather
+// than replaces, so "one already on file" does not satisfy it. It is optional
+// anyway, so it never gates a step.
+export const fileFieldToDocumentType: Record<string, string> = {
+  photo: 'photo',
+  marksheet: 'marksheet',
+  aadhar: 'aadhar',
+  incomeCertificate: 'income_certificate',
+}
+
 export const spotlightStepFields: Record<number, string[]> = {
   0: ["fullName", "photo", "dateOfBirth", "gender", "phone", "email", "village", "mandal", "district", "state", "pincode"],
   1: ["collegeName", "courseStream", "yearOfCompletion", "totalMarks", "maxMarks", "percentage", "currentStatus"],
