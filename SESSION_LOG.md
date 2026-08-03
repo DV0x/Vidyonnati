@@ -13,6 +13,50 @@ Sessions 1–4 predate this file. Their record is the handoff plus `git log`.
 
 ---
 
+## Session 6 — 2026-08-03
+
+**The site is in real use.** Four `students` rows on production, including
+complete applications with real names, addresses, dates of birth and phone
+numbers. Production now holds genuine personal data — no more test wipes without
+checking what is real first, and the credential rotations below stopped being
+housekeeping.
+
+### Fixed: admins landed on an empty student dashboard
+
+Reported as "I log in as `hello@vidyonnatifoundation.org` and see the student
+dashboard." **Auth was never wrong.** Three things combined:
+
+1. `app/(auth)/login/page.tsx:16` redirects everyone to `/dashboard` —
+   `searchParams.get("redirect") || "/dashboard"`, no `isAdmin` branch.
+2. Admins have no `students` row by design; `AuthContext` skips
+   `ensureStudentProfile` for them.
+3. `dashboard.summary` returns `{ student: null, applications: [], … }` for a
+   caller with no student row rather than throwing — so the page rendered a
+   working, empty student dashboard.
+
+`me.isAdmin` was true throughout and the `admins` row was correctly bound. It
+survived session 5's testing only because `/admin` was always reached by typing
+the URL, never by the default post-login path.
+
+**Fixed in the dashboard layout, not the login redirect** (`f2b1432`). The login
+page covers exactly one entry path; the layout also catches bookmarks, a stale
+`?redirect=/dashboard`, and direct navigation. Uses `router.replace` so the back
+button does not bounce, plus a render guard on `isAdmin` so the student
+dashboard does not flash for a frame while the redirect is in flight. No loop:
+the admin layout sends non-admins to `/`, not `/dashboard`, and both read
+`isAdmin` from the same context.
+
+Deployed to production; site verified healthy afterwards.
+
+### Still open — and now urgent
+
+**Rotate the Clerk `sk_live_` key and the Convex deploy key.** Both were pasted
+into a chat transcript in session 5. That was untidy when production was empty;
+with real applicants in the system the Clerk key now grants read access to their
+personal records.
+
+---
+
 ## Session 5 — 2026-08-01
 
 **Went in with:** the migration complete but unmerged on `convex-migration`, one
