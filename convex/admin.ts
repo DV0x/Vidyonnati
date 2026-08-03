@@ -755,6 +755,24 @@ export const updateApplication = mutation({
     const current = await ctx.db.get("applications", args.id)
     if (!current) throw new ConvexError("Application not found")
 
+    // needs_info without a note is an unanswerable request. The applicant is
+    // told to change something and never told what — true on the dashboard
+    // banner before this, and now true in an email that asks them to act.
+    //
+    // Checked against the status this write RESULTS IN, and against the note it
+    // results in, so it also catches clearing the note on a row already sitting
+    // in needs_info. Thrown before the patch, so nothing is written and no
+    // email is scheduled.
+    const nextStatus = args.status ?? current.status
+    if (nextStatus === "needs_info") {
+      const note = (args.reviewerNotes ?? current.reviewerNotes ?? "").trim()
+      if (!note) {
+        throw new ConvexError(
+          "Add a reviewer note before setting this to Needs Info. The note is emailed to the applicant and is the only thing telling them what to fix.",
+        )
+      }
+    }
+
     const now = Date.now()
     const patch: Partial<Doc<"applications">> = { updatedAt: now }
 
