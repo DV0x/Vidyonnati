@@ -67,6 +67,24 @@ export interface RenderedEmail {
 
 export const REPLY_TO = "hello@vidyonnatifoundation.org"
 
+// Mirrors the site footer (app/components/Footer.tsx). Kept as constants rather
+// than inlined so the two cannot drift silently — if the office moves, this is
+// the second place to change and it is worth being able to find.
+//
+// The phone number matters more than anything else down here. A guardian in
+// Ongole with a question about their child's scholarship will call; they will
+// not open a dashboard. So it is a tel: link, set larger than the address, and
+// in the brand colour so it reads as the tappable thing it is.
+const PHONE_DISPLAY = "+91 9440-045-144"
+const PHONE_TEL = "+919440045144"
+const ORG_NAME = "Vidyonnati Foundation"
+const POSTAL_ADDRESS = [
+  "D.No 6-218, 4th Lane, Srinagar Colony,",
+  "Kurnool Rd, Ongole, Prakasam,",
+  "Andhra Pradesh, India — 523002",
+]
+const CIN = "U80903AP2023NPL123763"
+
 // -- tokens -----------------------------------------------------------------
 
 const EMBER = "#ff531f" // --primary 14 100% 56%
@@ -275,6 +293,29 @@ function footer(): string {
                   Please mention your application ID when you write or call.
                 </td>
               </tr>
+              <tr>
+                <td style="padding-top:18px;">
+                  <div style="font-family:${SANS};font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:${BARK};padding-bottom:5px;">Call us</div>
+                  <div style="font-family:${SANS};font-size:19px;font-weight:700;letter-spacing:0.01em;padding-bottom:9px;">
+                    <a href="tel:${PHONE_TEL}" style="color:${EMBER};text-decoration:none;">${escapeHtml(PHONE_DISPLAY)}</a>
+                  </div>
+                  <div style="font-family:${SANS};font-size:13px;">
+                    <a href="mailto:${REPLY_TO}" style="color:${BARK};text-decoration:underline;">${REPLY_TO}</a>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding-top:18px;font-family:${SANS};font-size:12px;line-height:1.7;color:#a08a78;">
+                  <span style="color:${BARK};font-weight:700;">${escapeHtml(ORG_NAME)}</span><br />
+                  ${POSTAL_ADDRESS.map(escapeHtml).join("<br />\n                  ")}
+                </td>
+              </tr>
+              <tr>
+                <td style="padding-top:12px;font-family:${SANS};font-size:11px;line-height:1.6;color:#b39c8a;">
+                  CIN: ${escapeHtml(CIN)} &middot; Registered under the Companies Act, 2013<br />
+                  80G Certified &middot; 12A Registered
+                </td>
+              </tr>
             </table>
           </td>
         </tr>`
@@ -325,7 +366,18 @@ export function renderApplicationEmail(
   const kindLabel =
     applicationType === "first-year" ? "new scholarship" : "scholarship renewal"
 
-  const textFooter = `\n\nReply to this email and a person will read it. Please mention your application ID when you write or call.\n\nVIDYONNATI FOUNDATION`
+  const textFooter = `
+
+Reply to this email and a person will read it. Please mention your application ID when you write or call.
+
+Call us: ${PHONE_DISPLAY}
+Email:   ${REPLY_TO}
+
+${ORG_NAME}
+${POSTAL_ADDRESS.join("\n")}
+
+CIN: ${CIN} - Registered under the Companies Act, 2013
+80G Certified - 12A Registered`
 
   switch (kind) {
     case "application_received":
