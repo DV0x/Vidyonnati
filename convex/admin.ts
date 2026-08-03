@@ -3,6 +3,7 @@ import { paginationOptsValidator } from "convex/server"
 import type { PaginationOptions } from "convex/server"
 import { query, mutation } from "./_generated/server"
 import type { QueryCtx, MutationCtx } from "./_generated/server"
+import { internal } from "./_generated/api"
 import type { Doc, Id } from "./_generated/dataModel"
 import { requireAdmin, requireAdminForWrite } from "./lib/auth"
 import { counterKeys, readCounter, bumpCounter } from "./lib/counters"
@@ -719,6 +720,29 @@ function reviewAction(changed: boolean): string {
   return changed ? "status_change" : "notes_update"
 }
 
+// Which applicant email a status change should send, or null for none.
+//
+// pending is deliberately absent. The review dropdown does not offer it, and
+// moving a row back to pending is an internal correction rather than news the
+// applicant needs. Exhaustive over the status union, so adding a review status
+// fails to compile here rather than silently sending nothing.
+function statusEmailKind(
+  status: Doc<"applications">["status"],
+): "under_review" | "needs_info" | "approved" | "rejected" | null {
+  switch (status) {
+    case "under_review":
+      return "under_review"
+    case "needs_info":
+      return "needs_info"
+    case "approved":
+      return "approved"
+    case "rejected":
+      return "rejected"
+    case "pending":
+      return null
+  }
+}
+
 export const updateApplication = mutation({
   args: {
     id: v.id("applications"),
@@ -768,6 +792,33 @@ export const updateApplication = mutation({
         reviewerNotes: args.reviewerNotes ?? current.reviewerNotes,
       },
     )
+
+    // Notify the applicant, but only when the status actually moved. Saving the
+    // same status again, or editing only the reviewer's note, deliberately
+    // sends nothing — otherwise correcting a typo in the note would fire a
+    // second "we need more information" email at someone already acting on the
+    // first one.
+    //
+    // Scheduled from inside this transaction, so it inherits the write's fate:
+    // if the patch above rolls back, no email is sent for a decision that never
+    // landed. And because the send happens afterwards in an action, a Resend
+    // outage can never fail the status change itself.
+    if (statusChanged) {
+      const kind = statusEmailKind(args.status!)
+      if (kind) {
+        await ctx.scheduler.runAfter(0, internal.email.sendApplicationEmail, {
+          kind,
+          to: current.email,
+          recipientName: current.fullName,
+          applicationId: current.applicationId,
+          applicationDocId: args.id,
+          applicationType: current.applicationType,
+          academicYear: current.academicYear,
+          // The note as it will stand after this write, not as it was before.
+          reviewerNotes: args.reviewerNotes ?? current.reviewerNotes,
+        })
+      }
+    }
 
     return null
   },

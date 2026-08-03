@@ -1,5 +1,6 @@
 import { v, ConvexError } from "convex/values"
 import { query, mutation } from "./_generated/server"
+import { internal } from "./_generated/api"
 import type { Doc, Id } from "./_generated/dataModel"
 import {
   requireStudent,
@@ -263,6 +264,24 @@ export const create = mutation({
       updatedAt: Date.now(),
     })
 
+    // The acknowledgement. Scheduled rather than awaited inline: a mutation
+    // cannot call out to Resend, and scheduling from inside the transaction
+    // means the email is sent only if this insert actually commits.
+    //
+    // Addressed to the application's own email rather than the account's. They
+    // are the same string today, but this one travels with the row being
+    // written and is editable on a needs_info resubmit, so a typo is
+    // self-correcting.
+    await ctx.scheduler.runAfter(0, internal.email.sendApplicationEmail, {
+      kind: "application_received",
+      to: fields.email,
+      recipientName: fields.fullName,
+      applicationId,
+      applicationDocId: id,
+      applicationType: type,
+      academicYear,
+    })
+
     return { id, applicationId }
   },
 })
@@ -312,6 +331,20 @@ export const update = mutation({
     // needs_info was verified above, so this transition is unconditional.
     await bumpCounter(ctx, counterKeys.applicationsByStatus("needs_info"), -1)
     await bumpCounter(ctx, counterKeys.applicationsByStatus("under_review"), 1)
+
+    // Closes the loop on the one action the applicant takes under uncertainty.
+    // Deliberately not routed through the admin status-change path: this
+    // transition is the student's own resubmit, which applications.update flips
+    // server-side and attributes to nobody, so it needs its own wording.
+    await ctx.scheduler.runAfter(0, internal.email.sendApplicationEmail, {
+      kind: "resubmission_received",
+      to: fields.email,
+      recipientName: fields.fullName,
+      applicationId: existing.applicationId,
+      applicationDocId: id,
+      applicationType: existing.applicationType,
+      academicYear: existing.academicYear,
+    })
 
     return { id, applicationId: existing.applicationId }
   },
