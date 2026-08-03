@@ -120,6 +120,15 @@ queue emails the applicant. The two paths still unexercised by a real session �
 `applications.create` and `applications.update` — are worth watching with
 `npx convex logs --prod` when the first real application arrives.
 
+**Inbox, not spam** — confirmed by eye in Gmail. This was the one thing no API
+could answer and the one that decided whether any of this works: Resend's
+`last_event: delivered` means only that the receiving server accepted the
+message, and an `emailLogs` row reads `sent` just the same when Gmail files it
+under spam. A brand-new sending subdomain with no reputation had every reason to
+land there. It did not, on the first message, with SPF and DKIM passing and no
+DMARC record present at all. Adding DMARC is still worth doing, but it is a
+deliverability improvement rather than a fix for something broken.
+
 ### Left open
 
 - **The submitter/applicant split.** The big one. Cheap at 4 applications,
