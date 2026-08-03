@@ -99,6 +99,27 @@ correct. The guard was exercised across all four cases after redeployment. All
 six templates were rendered and read at a true 360px viewport, which caught the
 approval email labelling its congratulatory note "What we need".
 
+### Deployed
+
+`dc13b42` shipped earlier in the session; the remaining four went up together at
+the end (`8e44073` `4dca479` `d74ebf2` `71b7e96`, plus `c2f0662` for the docs).
+Vercel Ready in 47s. The ordering hazard did not arise: `vercel.json`'s build
+command is `npx convex deploy --cmd 'npm run build'`, so the functions reach
+`amicable-narwhal-186` before the frontend builds against them.
+
+Production was then checked rather than assumed. Calling
+`email:sendApplicationEmail` on prod with empty arguments returned
+`ArgumentValidationError` — proving the function is deployed, while sending
+nothing, because Convex validates arguments before the handler runs.
+`emailLogs` on prod is empty as expected, and `/`, `/gallery` and `/apply`
+answer 200, 200 and 307.
+
+**The emails are live from this point.** The next application submitted on
+production sends an acknowledgement, and every status change made in the admin
+queue emails the applicant. The two paths still unexercised by a real session —
+`applications.create` and `applications.update` — are worth watching with
+`npx convex logs --prod` when the first real application arrives.
+
 ### Left open
 
 - **The submitter/applicant split.** The big one. Cheap at 4 applications,
