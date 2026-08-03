@@ -1,7 +1,13 @@
 import { v, ConvexError } from "convex/values"
 import { query, mutation } from "./_generated/server"
 import type { Doc, Id } from "./_generated/dataModel"
-import { requireStudent, requireStudentForWrite, getOrCreateStudent } from "./lib/auth"
+import {
+  requireStudent,
+  requireStudentForWrite,
+  getOrCreateStudent,
+  getIdentity,
+  lookupStudent,
+} from "./lib/auth"
 import { applicationDocuments } from "./lib/studentData"
 import { bumpCounter, counterKeys } from "./lib/counters"
 import { applicationSearchText } from "./lib/search"
@@ -49,13 +55,24 @@ export const myApplication = query({
 // Used by the apply wizard to decide between "start a new application" and
 // "you already applied for this year". Returns the existing row's identifiers
 // only — the wizard needs to link to it, not read it.
+//
+// Null rather than a throw for "no identity" and "no student row", matching
+// dashboard.summary. This runs on the wizard's first render, which can beat
+// AuthContext's ensureStudentProfile on a fresh account; a student with no
+// profile has no application, so null is the truthful answer for that window.
+// A throw would surface as an error boundary over the form instead — strictly
+// worse than the unguarded form this replaces.
 export const existingForYear = query({
   args: {
     applicationType: v.union(v.literal("first-year"), v.literal("second-year")),
     academicYear: v.string(),
   },
   handler: async (ctx, args) => {
-    const student = await requireStudent(ctx)
+    const identity = await getIdentity(ctx)
+    if (!identity) return null
+
+    const student = await lookupStudent(ctx, identity)
+    if (!student) return null
 
     const existing: Doc<"applications"> | null = await ctx.db
       .query("applications")

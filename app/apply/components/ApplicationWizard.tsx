@@ -58,6 +58,30 @@ const STEPS = [
 const STORAGE_KEY_PREFIX = "vidyonnati_application_draft_"
 const STORAGE_EXPIRY = 24 * 60 * 60 * 1000
 
+// Module scope rather than a method, because the existing-application check
+// needs it as a query argument before the component has done anything else.
+// Academic year runs June to June, so "2026-2027" starts in June 2026.
+const getCurrentAcademicYear = () => {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = now.getMonth() + 1
+  if (month >= 6) {
+    return `${year}-${year + 1}`
+  }
+  return `${year - 1}-${year}`
+}
+
+// Plain-language status for someone who has landed back on the form and needs
+// to know where their existing application stands. Keyed on the status union so
+// adding a review status fails the build here rather than rendering blank.
+const EXISTING_STATUS_COPY: Record<Doc<"applications">["status"], string> = {
+  pending: "We have it, and it is waiting to be reviewed.",
+  under_review: "Our team is reviewing it now.",
+  needs_info: "We have asked for more information before we can continue.",
+  approved: "It has been approved.",
+  rejected: "This application was not successful this year.",
+}
+
 interface ApplicationWizardProps {
   editApplicationId?: string
   editApplicationType?: ApplicationType
@@ -246,6 +270,31 @@ export function ApplicationWizard({ editApplicationId, editApplicationType }: Ap
     ? (editApplication?.applicationType ?? editApplicationType ?? "first-year")
     : selectedType
 
+  // Pinned for the component's lifetime. Recomputing during render would make
+  // this a fresh query argument the moment the clock crosses into June, and
+  // re-subscribe underneath a half-filled form.
+  const academicYear = useMemo(() => getCurrentAcademicYear(), [])
+
+  // The same duplicate check applications.create runs, moved ahead of step one.
+  // The mutation's guard fires only after the form is complete and the uploads
+  // have started, so someone who already had an application spent the whole
+  // form to be refused at the end — which is what a real applicant hit.
+  //
+  // Keyed on applicationType as well as the year, matching the uniqueness the
+  // server enforces: holding a first-year application must not block a renewal.
+  // Skipped in edit mode, where an existing application is the point, and while
+  // signed out, where the login gate below renders instead.
+  const shouldCheckExisting = !isEditMode && !!user
+  const existingApplication = useQuery(
+    api.applications.existingForYear,
+    shouldCheckExisting ? { applicationType, academicYear } : "skip",
+  )
+  // A skipped query reads undefined too, so this has to be gated on the query
+  // actually being active or the form would never render for a signed-out
+  // visitor.
+  const isCheckingExisting =
+    shouldCheckExisting && existingApplication === undefined
+
   // File fields the server already holds, in edit mode. The submit path only
   // uploads files the student actually re-selected, so a document already on
   // file satisfies its field — without this a needs_info resubmit would demand
@@ -416,18 +465,6 @@ export function ApplicationWizard({ editApplicationId, editApplicationType }: Ap
     window.scrollTo({ top: 0, behavior: "smooth" })
   }
 
-  // Helper to get current academic year (e.g., "2024-2025")
-  const getCurrentAcademicYear = () => {
-    const now = new Date()
-    const year = now.getFullYear()
-    const month = now.getMonth() + 1
-    // Academic year starts in June
-    if (month >= 6) {
-      return `${year}-${year + 1}`
-    }
-    return `${year - 1}-${year}`
-  }
-
   // Upload a single document.
   //
   // Three steps instead of the old one-shot POST, because Convex uploads go
@@ -540,7 +577,9 @@ export function ApplicationWizard({ editApplicationId, editApplicationType }: Ap
           : await createApplication({
               ...applicationData,
               applicationType,
-              academicYear: getCurrentAcademicYear(),
+              // The pinned value, so the pre-flight check and the mutation's
+              // own guard can never disagree about which year this is.
+              academicYear,
             })
 
       const appId = result.id
@@ -611,8 +650,9 @@ export function ApplicationWizard({ editApplicationId, editApplicationType }: Ap
     }
   }
 
-  // Auth loading state
-  if (authLoading || isLoadingEdit) {
+  // Auth loading state. isCheckingExisting joins it so the form is never shown
+  // and then pulled away — one spinner, then whichever answer is correct.
+  if (authLoading || isLoadingEdit || isCheckingExisting) {
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -724,6 +764,121 @@ export function ApplicationWizard({ editApplicationId, editApplicationType }: Ap
               Back to Home
             </Button>
           </motion.div>
+        </div>
+      </motion.div>
+    )
+  }
+
+  // Already applied for this type and year.
+  //
+  // An early return rather than a branch inside the form, and deliberately
+  // without the segmented type control: on this screen that control reads as a
+  // form input when what the person needs is a way out, so the two escape
+  // hatches are spelled out as sentences below instead.
+  //
+  // Suppressed while submitting. This query is live, so it goes truthy the
+  // instant create() commits — which is several seconds before setIsSubmitted,
+  // with the document uploads still in flight in between. Without the guard a
+  // successful submit flashes "you have already applied" at the person who is
+  // in the middle of applying, which is the exact confusion this screen exists
+  // to remove. Afterwards the isSubmitted branch above wins, so this only ever
+  // renders for someone arriving at the form with an application already filed.
+  if (existingApplication && !isSubmitting) {
+    const otherType: ApplicationType =
+      applicationType === "first-year" ? "second-year" : "first-year"
+
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="bg-white/80 backdrop-blur-xl rounded-3xl border border-white/50 shadow-2xl shadow-gray-200/50 p-8 sm:p-10 text-center"
+      >
+        <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-xl shadow-blue-500/25">
+          <CheckCircle2 className="w-8 h-8 text-white" />
+        </div>
+
+        <h2 className="text-2xl font-bold text-gray-900 mb-3">
+          You have already applied
+        </h2>
+        <p className="text-gray-600 mb-8 max-w-sm mx-auto">
+          {applicationType === "first-year"
+            ? "A new scholarship application"
+            : "A renewal application"}{" "}
+          for {academicYear} was already submitted from this account.{" "}
+          {EXISTING_STATUS_COPY[existingApplication.status]}
+        </p>
+
+        <div className="bg-gradient-to-br from-gray-50 to-gray-100/50 rounded-2xl p-5 max-w-xs mx-auto mb-8 border border-gray-100">
+          <p className="text-xs uppercase tracking-wider text-gray-500 mb-2">
+            Your Application ID
+          </p>
+          <p className="font-mono text-xl font-bold text-gray-900">
+            {existingApplication.applicationId}
+          </p>
+          <p className="text-xs text-gray-500 mt-2">
+            Quote this when you contact us
+          </p>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+          {existingApplication.status === "needs_info" ? (
+            <Button
+              asChild
+              className="bg-gradient-to-r from-primary to-orange-500 hover:from-primary/90 hover:to-orange-500/90 text-white px-8 py-6 rounded-xl text-base font-semibold shadow-lg shadow-primary/25 transition-all hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5"
+            >
+              <Link
+                href={`/apply?edit=${existingApplication._id}&type=${applicationType}`}
+              >
+                Update &amp; Resubmit
+              </Link>
+            </Button>
+          ) : (
+            <Button
+              asChild
+              className="bg-gradient-to-r from-primary to-orange-500 hover:from-primary/90 hover:to-orange-500/90 text-white px-8 py-6 rounded-xl text-base font-semibold shadow-lg shadow-primary/25 transition-all hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5"
+            >
+              <Link href={`/dashboard/applications/${existingApplication._id}`}>
+                View Application
+              </Link>
+            </Button>
+          )}
+          <Button
+            asChild
+            variant="outline"
+            className="px-8 py-6 rounded-xl text-base font-semibold"
+          >
+            <Link href="/dashboard">My Applications</Link>
+          </Button>
+        </div>
+
+        <div className="mt-8 pt-6 border-t border-gray-100 space-y-3">
+          <p className="text-sm text-gray-500">
+            Meant to apply for{" "}
+            {otherType === "second-year" ? "a renewal" : "a new scholarship"}{" "}
+            instead?{" "}
+            <button
+              type="button"
+              onClick={() => handleTypeChange(otherType)}
+              className="text-primary font-medium hover:underline"
+            >
+              Switch to {otherType === "second-year" ? "Renewal" : "New"}
+            </button>
+          </p>
+          {/* One account currently holds one student, so a teacher or guardian
+              submitting for a second child lands here with nowhere to go. Until
+              that model changes, say so plainly and give them a person. */}
+          <p className="text-sm text-gray-500">
+            Applying on behalf of a different student? Each student needs their
+            own account for now — write to{" "}
+            <a
+              href="mailto:hello@vidyonnatifoundation.org"
+              className="text-primary font-medium hover:underline"
+            >
+              hello@vidyonnatifoundation.org
+            </a>{" "}
+            and we will help you get them registered.
+          </p>
         </div>
       </motion.div>
     )
