@@ -30,13 +30,24 @@ import {
 const RESEND_ENDPOINT = "https://api.resend.com/emails"
 
 // Resend will only deliver from a domain you have verified with it, via DNS.
-// Until vidyonnatifoundation.org is verified, onboarding@resend.dev is the only
-// usable sender AND it can only deliver to the Resend account owner's own
-// address — fine for a first test, useless for real applicants. Once the domain
-// verifies, set this on BOTH deployments:
+// Until that is done, onboarding@resend.dev is the only usable sender AND it
+// can only deliver to the Resend account owner's own address — fine for a first
+// test, useless for real applicants.
 //
-//   npx convex env set RESEND_FROM "Vidyonnati Foundation <hello@vidyonnatifoundation.org>"
-//   npx convex env set --prod RESEND_FROM "Vidyonnati Foundation <hello@vidyonnatifoundation.org>"
+// The verified domain is the SUBDOMAIN mail.vidyonnatifoundation.org, not the
+// root. The root already carries a working Zoho SPF record
+// ("v=spf1 include:zoho.in ~all") and a domain may hold only one v=spf1 TXT;
+// verifying the root would mean merging Resend into that live record, where a
+// mistake breaks authentication for every message including the hello@ mailbox
+// applicants reply to. SPF does not inherit parent-to-subdomain, so the two
+// stay independent.
+//
+// So the From address must live on the subdomain. Reply-To deliberately does
+// not — see REPLY_TO — because a reply belongs in the human Zoho inbox, and
+// reply-to has no domain-verification requirement.
+//
+//   npx convex env set RESEND_FROM "Vidyonnati Foundation <hello@mail.vidyonnatifoundation.org>"
+//   npx convex env set --prod RESEND_FROM "Vidyonnati Foundation <hello@mail.vidyonnatifoundation.org>"
 //
 // Convex env vars are per-deployment. Setting only one leaves the other sending
 // from resend.dev, or not sending at all — the same per-instance trap CLAUDE.md
