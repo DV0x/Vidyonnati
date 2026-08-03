@@ -30,7 +30,7 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode
 }) {
-  const { user, student, isLoading, signOut } = useAuth()
+  const { user, student, isAdmin, isLoading, signOut } = useAuth()
   const router = useRouter()
   const pathname = usePathname()
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -41,8 +41,25 @@ export default function DashboardLayout({
 
     if (!user) {
       router.push('/login?redirect=/dashboard')
+      return
     }
-  }, [user, isLoading, router])
+
+    // Admins have no student row by design (AuthContext skips
+    // ensureStudentProfile for them), so dashboard.summary returns an empty
+    // result rather than an error and every /dashboard route renders a blank
+    // student view. Send them where they belong.
+    //
+    // Here rather than in the login page's redirect because this also catches
+    // bookmarks, a stale ?redirect=/dashboard, and direct navigation — the
+    // login page only covers one of those. `replace` so the back button does
+    // not land on /dashboard and bounce again.
+    //
+    // No redirect loop: the admin layout sends non-admins to '/', not here,
+    // and both read isAdmin from the same AuthContext.
+    if (isAdmin) {
+      router.replace('/admin')
+    }
+  }, [user, isAdmin, isLoading, router])
 
   const handleSignOut = async () => {
     await signOut()
@@ -58,6 +75,12 @@ export default function DashboardLayout({
 
   // Redirect if definitely not authorized (after loading completes)
   if (!isLoading && !user) {
+    return <DashboardSkeleton />
+  }
+
+  // Admin mid-redirect to /admin. router.replace is async, so without this the
+  // student dashboard renders for a frame first.
+  if (!isLoading && isAdmin) {
     return <DashboardSkeleton />
   }
 
