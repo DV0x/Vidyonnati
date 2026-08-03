@@ -337,7 +337,38 @@ both. Details under "Wizard validation" below.
 | Clerk **prod** instance | `clerk.vidyonnatifoundation.org` (DNS + TLS verified) |
 | Vercel project | `vidyonnati`, custom domain `vidyonnatifoundation.org`, deploys via GitHub integration (repo is **not** linked locally — no `.vercel/`) |
 | DNS | Namecheap (`dns1/dns2.registrar-servers.com`) |
-| Mail | Zoho (`zoho.in`) — unaffected by Clerk's `clkmail` records |
+| Mail (inbound) | Zoho (`zoho.in`) on the **root** domain — unaffected by Clerk's `clkmail` records, and deliberately untouched by Resend |
+| Mail (outbound, session 7) | Resend, sending domain **`mail.vidyonnatifoundation.org`** (subdomain, verified, region `ap-northeast-1` Tokyo). DKIM at `resend._domainkey.mail…`, SPF `v=spf1 include:amazonses.com ~all` and MX `feedback-smtp.ap-northeast-1.amazonses.com` on `send.mail…` |
+
+**Why a subdomain and not the root.** The root already carries
+`v=spf1 include:zoho.in ~all` and a domain may hold only one `v=spf1` TXT.
+Verifying the root would have meant merging Resend into that live record, where a
+mistake produces an SPF PermError that breaks authentication for *all* mail —
+including the `hello@` mailbox every applicant email tells people to reply to.
+SPF does not inherit parent-to-subdomain, so the two are independent. Confirmed
+after verification: root MX and root SPF unchanged.
+
+`RESEND_FROM` is therefore on the subdomain
+(`Vidyonnati Foundation <hello@mail.vidyonnatifoundation.org>`) while `REPLY_TO`
+is hardcoded to the root `hello@vidyonnatifoundation.org` — reply-to carries no
+verification requirement, so mail sends from the isolated subdomain and replies
+land in Zoho. There is **no MX on `mail.`**, so a client that ignored Reply-To
+would bounce; accepted knowingly, since Gmail (the whole audience) honours it.
+
+> ⚠️ The `RESEND_API_KEY` currently installed on both deployments was pasted
+> into a chat transcript on 2026-08-03 and is **full-access** — it can create and
+> delete API keys and domains, not just send. Replacing it with a
+> `sending_access` key scoped to `mail.vidyonnatifoundation.org` was proposed and
+> declined during that session. It remains outstanding.
+
+| Email env var | Where |
+|---|---|
+| `RESEND_API_KEY` | Convex env, **both** deployments. Absent → `emailLogs` row written with status `failed` and the fix in `errorMessage`; nothing throws. |
+| `RESEND_FROM` | Convex env, both. Defaults to `onboarding@resend.dev`, which only delivers to the Resend account owner. |
+| `SITE_URL` | Convex env, unset on both. Defaults to `https://vidyonnatifoundation.org`, so dev emails link at production. |
+
+Note the Resend var in `.env.local` is a leftover from the Supabase era and is
+**not** what the email path reads — these are Convex deployment env vars.
 
 `.env.local` (gitignored) holds: Convex deployment vars, Clerk **`pk_test`/`sk_test`**
 (dev instance — production keys are deliberately *not* here; Clerk rejects
@@ -436,10 +467,31 @@ Two things to know before signing in as the admin:
 
 ## What is broken right now
 
-Nothing known. `tsc --noEmit` 0 errors · `eslint .` 0 errors, **53 warnings**
-(down from 56 after Phase 4) · `npm run build` succeeds — no `/api` routes, down
-from 46 pages pre-migration. Session 5's rate limiting added **no** warnings and
-no errors; those three numbers are unchanged from the end of session 4.
+`tsc --noEmit` 0 errors on both the root and `convex/` configs · `eslint .`
+0 errors, **53 warnings** · `npm run build` succeeds. Sessions 5, 6 and 7 each
+added no warnings and no errors; those numbers are unchanged since session 4.
+
+Two known defects, both found in session 7:
+
+- **The desktop nav overflows between 1024px and ~1150px.** `MainNavigation`
+  reveals the desktop links at Tailwind's `lg` (1024px), but their contents need
+  about 1150px. In that band the page scrolls horizontally and the Login button
+  is clipped off the right edge — 61px at 1024px, 33px at 1080px, clean by
+  1150px. Measured in a real browser, not inferred. Fix is moving the desktop
+  nav from `lg:` to `xl:` so the hamburger stays until there is room. Below
+  1024px the behaviour is correct but abrupt: every link disappears at once,
+  leaving only the wordmark and a ☰ with no other affordance, which reads as
+  "navigation is broken" to someone who does not spot the icon.
+- **One account is still one applicant.** Uniqueness is
+  `(studentId, applicationType, academicYear)` with `studentId` derived from the
+  Clerk identity, and `applications.create` patches the `students` row from the
+  form. A teacher or guardian submitting for a second child is refused; where two
+  submissions *do* both succeed (differing type or year) the second silently
+  overwrites the first child's name, DOB and address on the shared profile, and
+  `previousApplicationId` can link a renewal to a different child's approved
+  award. All four production applications have `applications.email` identical to
+  the account email, so nothing in the data distinguishes student from submitter.
+  This is the highest-value thing left and it is cheap now and expensive later.
 
 Session 4 also fixed three defects that predate it. The wizard validation gap has
 its own section below; the other two were found while wiring photo rendering and

@@ -13,6 +13,112 @@ Sessions 1–4 predate this file. Their record is the handoff plus `git log`.
 
 ---
 
+## Session 7 — 2026-08-03 (later the same day)
+
+**The system started talking back.** Before today it sent no email of any kind,
+ever. A real applicant refilled the entire form and was refused at the last step
+because nothing had ever told them the first submission worked.
+
+### Shipped
+
+| | |
+|---|---|
+| Apply pre-check | `existingForYear` wired into the wizard — duplicates caught before step one instead of after the uploads (`dc13b42`) |
+| Six applicant emails | one per state transition, Resend via `internalAction` + scheduler (`8e44073`) |
+| Sending domain | `mail.vidyonnatifoundation.org` verified, Tokyo region (`4dca479`) |
+| Footer contact block | address, phone, CIN, 80G/12A in every email (`d74ebf2`) |
+| `needs_info` guard | cannot set that status without a reviewer note (`71b7e96`) |
+
+### What the production data said
+
+7 student accounts, 4 applications, **3 accounts that never produced one**. All
+four applications are first-year 2026-2027, all `pending`, all from gmail.com.
+
+The finding that matters: **in all 4, `applications.email` is byte-identical to
+the login email.** Nobody has ever edited the value the wizard prefills. So there
+is no field anywhere distinguishing the student from the person who filled the
+form, and the operator's own description is that teachers and guardians submit
+most of them. The account *is* the applicant, structurally — uniqueness is
+`(studentId, applicationType, academicYear)` — so a teacher's second student is
+refused, and where two do succeed (different type or year) the second silently
+overwrites the first's name, DOB and address on the shared profile, and a
+renewal can link to a different child's approved award.
+
+### Decisions worth remembering
+
+**Only a real status change notifies.** `admin.updateApplication` already
+computed that boolean for its counters, so the trigger existed and was already
+correct. Notes-only edits and re-saving the same status send nothing — otherwise
+fixing a typo in a note fires a second "we need more information" at someone
+already acting on the first.
+
+**Emails address `applications.email`, not the account.** Identical today, but it
+travels with the row being written and is editable on a resubmit, so a wrong
+address self-corrects.
+
+**Reviewer notes changed audience.** They were dashboard-only, which made them
+function as private scratch. They are now mailed verbatim. Whoever reviews needs
+to know; the field gives no hint that it changed.
+
+**Templates are hardcoded TypeScript.** The `emailTemplates` table stays unused —
+using it means building an editing UI before a single email has gone out.
+
+**The sending domain is a subdomain because of Zoho**, not for reputation
+theory. Full reasoning is in the handoff's environment map.
+
+### What was learned the hard way
+
+Four different ways to "verify" nothing at all, all hit in one session:
+
+**`grep -c` counts matching lines, not matches.** Comparing server HTML against
+post-hydration DOM appeared to show nav links vanishing during hydration. The two
+files simply wrapped differently. Nearly diagnosed a hydration bug that did not
+exist.
+
+**Headless Chrome clamps the viewport to a 500px minimum.** A `--window-size=400`
+screenshot is a *crop* of a 500px viewport, not a 400px render. This produced
+convincing "text clipped off the right edge" evidence, and a code comment
+claiming a verified failure that never happened. True narrow-width rendering
+needs an iframe of that width inside a wider window.
+
+**`vercel ls` prints its status table to stderr** and only bare URLs to stdout.
+A poll loop with `2>/dev/null` matches the deployment line, finds neither "Ready"
+nor "Error" in it, and times out while the deploy has long since succeeded.
+
+**Editing and typechecking a Convex function is not deploying it.** The
+`needs_info` guard passed all four test cases on its first run — because `convex
+dev` had not re-run and the old code was still serving. A green matrix against
+stale functions is indistinguishable from a green matrix against correct ones.
+
+### Verified against real infrastructure
+
+Domain verification confirmed from DNS rather than the dashboard (DKIM, SPF, MX
+all resolving; root MX and root SPF unchanged). Three emails actually delivered —
+Resend reports `last_event: delivered` — with `from`, `reply_to` and subject all
+correct. The guard was exercised across all four cases after redeployment. All
+six templates were rendered and read at a true 360px viewport, which caught the
+approval email labelling its congratulatory note "What we need".
+
+### Left open
+
+- **The submitter/applicant split.** The big one. Cheap at 4 applications,
+  a data-cleanup project on Aadhaar and bank details at 400. Decide before
+  promoting the form to more schools.
+- **The `RESEND_API_KEY` is full-access and was pasted into a transcript.**
+  Replacing it with a `sending_access` key scoped to the sending domain was
+  proposed and declined this session.
+- **Nav overflows between 1024px and ~1150px** — the desktop nav switches on at
+  Tailwind's `lg` but needs ~1150px, so the page scrolls sideways and the Login
+  button is clipped up to 61px off-screen. Fix is moving the breakpoint to `xl`.
+- **No DMARC** on the root domain at all.
+- `applications.create` and `applications.update` email paths are typechecked and
+  share the proven scheduler mechanism, but have not been fired by a real student
+  session. Watch `npx convex logs --prod` on the first real application.
+- Pre-existing and unchanged: no test suite, the `createRouteMatcher` migration,
+  53 lint warnings, the Clerk `user.created` webhook.
+
+---
+
 ## Session 6 — 2026-08-03
 
 **The site is in real use.** Four `students` rows on production, including
